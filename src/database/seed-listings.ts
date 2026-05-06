@@ -394,7 +394,6 @@ async function seed() {
 
   const client = algoliasearch(algoliaAppId, algoliaApiKey!);
   const objects = saved.map((l) => {
-    const listing = l as Listing & { category?: ListingCategory };
     const cat = cats.find(c => c.id === l.categoryId);
     return {
       objectID: l.id,

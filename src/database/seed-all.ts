@@ -95,7 +95,7 @@ async function seedPromotionTypes(ds: DataSource): Promise<void> {
 // NOTE: Bundles module not yet implemented. This step will be wired in
 // automatically once the Bundle entity is created in a future slice.
 
-async function seedBundles(_ds: DataSource): Promise<void> {
+function seedBundles(): void {
   console.log('⏭️  Bundles: module not yet implemented — skipping.');
 }
 

@@ -6,7 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { algoliasearch, type SearchClient } from 'algoliasearch';
-import { Like, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ListingStatus } from '../../common/enums/listing-status.enum';
 import { Listing } from '../listings/entities/listing.entity';
 import {

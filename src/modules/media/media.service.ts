@@ -22,7 +22,7 @@ export class MediaService {
     this.storage = new Storage({
       projectId: config.get<string>('GCP_PROJECT_ID'),
       ...(keyJson
-        ? { credentials: JSON.parse(keyJson) }
+        ? { credentials: JSON.parse(keyJson) as Record<string, unknown> }
         : { keyFilename: keyFile }),
     });
     this.bucketName = config.get<string>('GCP_BUCKET_NAME')!;

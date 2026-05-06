@@ -98,7 +98,7 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  async getMe(user: User): Promise<Partial<User>> {
+  getMe(user: User): Partial<User> {
     this.usersRepo.update(user.id, { lastActive: new Date() }).catch(() => null);
     return this.sanitize(user);
   }

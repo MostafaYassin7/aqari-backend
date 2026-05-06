@@ -43,7 +43,6 @@ export class CrmService {
       take: limit,
     });
 
-    const now = new Date();
     const data = await Promise.all(
       clients.map(async (client) => {
         const upcomingReminders = await this.remindersRepo.count({
