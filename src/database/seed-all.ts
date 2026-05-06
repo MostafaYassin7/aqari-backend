@@ -413,7 +413,7 @@ async function main() {
 
   const catMap = await seedCategories(dataSource);      // step 1
   await seedPromotionTypes(dataSource);                 // step 2
-  await seedBundles(dataSource);                        // step 3 (stub)
+  seedBundles();                                         // step 3 (stub)
   const { broker } = await seedUsers(dataSource);       // steps 4, 5, 6
   const listings = await seedListings(dataSource, catMap, broker); // step 7
 
