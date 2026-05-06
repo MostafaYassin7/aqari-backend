@@ -43,4 +43,4 @@ jobs:
             --fail --silent --show-error
 
       - name: Deployment triggered
-        run: echo "✅ Dokploy deployment triggered"
+        run: echo "✅ Dokploy deployment triggered"    
