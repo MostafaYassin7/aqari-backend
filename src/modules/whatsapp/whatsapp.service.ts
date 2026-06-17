@@ -29,8 +29,12 @@ export class WhatsappService {
           body: JSON.stringify(payload),
         },
       );
-      const data = (await res.json()) as { messages?: unknown[] };
-      return res.status === 200 && (data.messages?.length ?? 0) > 0;
+      const data = (await res.json()) as { messages?: unknown[]; error?: unknown };
+      const success = res.status === 200 && (data.messages?.length ?? 0) > 0;
+      if (!success) {
+        this.logger.error(`WhatsApp API rejected message — status: ${res.status}`, JSON.stringify(data));
+      }
+      return success;
     } catch (err) {
       this.logger.error('WhatsApp send message failed', err);
       return false;
