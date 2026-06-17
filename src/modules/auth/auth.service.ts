@@ -1,10 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { MoreThan, Repository } from 'typeorm';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { User } from '../users/entities/user.entity';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { OtpCode } from './entities/otp-code.entity';
@@ -12,6 +13,8 @@ import { JwtPayload } from './strategies/jwt.strategy';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(OtpCode)
     private readonly otpRepo: Repository<OtpCode>,
@@ -19,24 +22,27 @@ export class AuthService {
     private readonly usersRepo: Repository<User>,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly whatsapp: WhatsappService,
   ) {}
 
   async sendOtp(phone: string): Promise<Record<string, unknown>> {
-    // Delete previous unused OTPs for this phone
     await this.otpRepo.delete({ phone, isUsed: false });
 
-    // TODO: replace with real OTP generation before production
-    const rawCode = '123456';
+    const rawCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Hash and save
     const hashed = await bcrypt.hash(rawCode, 10);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await this.otpRepo.save(
       this.otpRepo.create({ phone, code: hashed, expiresAt }),
     );
 
+    const waPhone = phone.replace(/^\+/, '');
+    this.whatsapp
+      .sendWhatsappOfficialTemplate(waPhone, 'otp', [rawCode])
+      .catch((err) => this.logger.error(`WhatsApp OTP delivery failed for ${phone}`, err));
+
     const isDev = this.config.get<string>('NODE_ENV') === 'development';
-    console.log(`OTP for ${phone}: ${rawCode}`);
+    this.logger.log(`OTP requested for ${phone}`);
 
     return {
       message: 'OTP sent',

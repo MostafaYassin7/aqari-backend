@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtGuard } from '../../common/guards/jwt.guard';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { User } from '../users/entities/user.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -13,6 +14,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 @Module({
   imports: [
     TypeOrmModule.forFeature([OtpCode, User]),
+    WhatsappModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],

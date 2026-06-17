@@ -8,7 +8,11 @@
       "Bash(npx tsc:*)",
       "Bash(docker-compose logs:*)",
       "Bash(docker-compose exec:*)",
-      "Bash(docker-compose restart:*)"
+      "Bash(docker-compose restart:*)",
+      "Bash(cd /d \"D:\\\\Aqar\\\\aqar-backend\")",
+      "Bash(dir)",
+      "Bash(cd /d D:\\\\Aqar\\\\aqar-backend)",
+      "Bash(powershell -Command \"ls\")"
     ]
   }
 }
