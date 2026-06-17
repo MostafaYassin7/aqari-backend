@@ -91,7 +91,7 @@ export class WhatsappService {
     formData.append('messaging_product', 'whatsapp');
     formData.append(
       'file',
-      new Blob([buffer], { type: 'application/pdf' }),
+      new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }),
       filename,
     );
 
