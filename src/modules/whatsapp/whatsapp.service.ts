@@ -41,6 +41,30 @@ export class WhatsappService {
     }
   }
 
+  async sendWhatsappOfficialOtp(to: string, code: string): Promise<boolean> {
+    return this.sendWhatsappOfficialMessage({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'template',
+      template: {
+        name: 'login_otp',
+        language: { code: 'en' },
+        components: [
+          {
+            type: 'body',
+            parameters: [{ type: 'text', text: code }],
+          },
+          {
+            type: 'button',
+            sub_type: 'copy_code',
+            index: '0',
+            parameters: [{ type: 'coupon_code', coupon_code: code }],
+          },
+        ],
+      },
+    });
+  }
+
   async sendWhatsappOfficialText(
     to: string,
     message: string,
