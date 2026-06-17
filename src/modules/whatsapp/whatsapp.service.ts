@@ -54,6 +54,7 @@ export class WhatsappService {
     templateName: string,
     bodyParams: string[],
     urlButtonSuffix?: string,
+    language = 'ar',
   ): Promise<boolean> {
     const components: object[] = [
       {
@@ -77,7 +78,7 @@ export class WhatsappService {
       type: 'template',
       template: {
         name: templateName,
-        language: { code: 'ar' },
+        language: { code: language },
         components,
       },
     });

@@ -38,7 +38,7 @@ export class AuthService {
 
     const waPhone = phone.replace(/^\+/, '');
     this.whatsapp
-      .sendWhatsappOfficialTemplate(waPhone, 'otp', [rawCode])
+      .sendWhatsappOfficialTemplate(waPhone, 'login_otp', [rawCode], undefined, 'en')
       .catch((err) => this.logger.error(`WhatsApp OTP delivery failed for ${phone}`, err));
 
     const isDev = this.config.get<string>('NODE_ENV') === 'development';
