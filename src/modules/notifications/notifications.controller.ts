@@ -1,9 +1,12 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -16,6 +19,8 @@ import {
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { User } from '../users/entities/user.entity';
+import { DeregisterPushTokenDto } from './dto/deregister-push-token.dto';
+import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 import { NotificationsService } from './notifications.service';
 
 @ApiTags('Notifications')
@@ -60,5 +65,17 @@ export class NotificationsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.notificationsService.markAsRead(user.id, id);
+  }
+
+  @Post('push-token')
+  @ApiOperation({ summary: 'Register FCM push token for this device' })
+  registerPushToken(@GetUser() user: User, @Body() dto: RegisterPushTokenDto) {
+    return this.notificationsService.registerPushToken(user.id, dto.token, dto.platform);
+  }
+
+  @Delete('push-token')
+  @ApiOperation({ summary: 'Deregister FCM push token (call on logout)' })
+  deregisterPushToken(@GetUser() user: User, @Body() dto: DeregisterPushTokenDto) {
+    return this.notificationsService.deregisterPushToken(user.id, dto.token);
   }
 }

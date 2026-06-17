@@ -1,24 +1,30 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { FcmService } from './fcm.service';
 import {
   Notification,
   NotificationReferenceType,
   NotificationType,
 } from './entities/notification.entity';
+import { PushToken, PushTokenPlatform } from './entities/push-token.entity';
 
 @Injectable()
 export class NotificationsService {
-  // Injected by the gateway after init to avoid circular dep
+  private readonly logger = new Logger(NotificationsService.name);
   private server: { to: (room: string) => { emit: (event: string, data: unknown) => void } } | null = null;
 
   constructor(
     @InjectRepository(Notification)
     private readonly repo: Repository<Notification>,
+    @InjectRepository(PushToken)
+    private readonly pushTokenRepo: Repository<PushToken>,
+    private readonly fcmService: FcmService,
   ) {}
 
   setServer(server: NotificationsService['server']) {
@@ -46,7 +52,32 @@ export class NotificationsService {
 
     const saved = await this.repo.save(notification);
     this.server?.to(userId).emit('new_notification', saved);
+
+    const pushTokens = await this.pushTokenRepo.find({ where: { userId } });
+    if (pushTokens.length > 0) {
+      const data: Record<string, string> = {};
+      if (referenceType) data['referenceType'] = referenceType;
+      if (referenceId) data['referenceId'] = referenceId;
+
+      this.fcmService
+        .sendFcmPushNotification(
+          pushTokens.map((t) => t.token),
+          title,
+          body,
+          Object.keys(data).length > 0 ? data : undefined,
+        )
+        .catch((err) => this.logger.error(`FCM push failed for user ${userId}`, err));
+    }
+
     return saved;
+  }
+
+  async registerPushToken(userId: string, token: string, platform: PushTokenPlatform): Promise<void> {
+    await this.pushTokenRepo.upsert({ userId, token, platform }, ['token']);
+  }
+
+  async deregisterPushToken(userId: string, token: string): Promise<void> {
+    await this.pushTokenRepo.delete({ userId, token });
   }
 
   // ─── MARK AS READ ────────────────────────────────────────────────────────────

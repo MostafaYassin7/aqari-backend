@@ -2,3 +2,4 @@ node_modules/
 dist/
 .env
 gcp-service-account.json
+firebase-service-account.json
