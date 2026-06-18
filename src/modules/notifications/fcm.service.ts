@@ -60,7 +60,7 @@ export class FcmService implements OnModuleInit {
     });
 
     const staleTokens: string[] = [];
-    response.responses.forEach((res, idx) => {
+    response.responses.forEach((res: admin.messaging.SendResponse, idx: number) => {
       if (!res.success && res.error?.code === 'messaging/registration-token-not-registered') {
         staleTokens.push(tokens[idx]);
       }
