@@ -12,7 +12,6 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { ListingsAlgoliaService } from '../listings/listings-algolia.service';
 import { Listing } from '../listings/entities/listing.entity';
 import {
-  Notification,
   NotificationReferenceType,
   NotificationType,
 } from '../notifications/entities/notification.entity';
