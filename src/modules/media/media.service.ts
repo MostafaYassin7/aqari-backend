@@ -19,11 +19,19 @@ export class MediaService {
     const keyFile = config.get<string>('GCP_KEY_FILE');
     const keyJson = config.get<string>('GCP_KEY_JSON');
 
+    // GCP_KEY_JSON can be raw JSON or base64-encoded JSON.
+    // Base64 is recommended — raw JSON in .env breaks on private_key newlines.
+    let credentials: Record<string, unknown> | undefined;
+    if (keyJson) {
+      const raw = keyJson.trimStart().startsWith('{')
+        ? keyJson
+        : Buffer.from(keyJson, 'base64').toString('utf8');
+      credentials = JSON.parse(raw) as Record<string, unknown>;
+    }
+
     this.storage = new Storage({
       projectId: config.get<string>('GCP_PROJECT_ID'),
-      ...(keyJson
-        ? { credentials: JSON.parse(keyJson) as Record<string, unknown> }
-        : { keyFilename: keyFile }),
+      ...(credentials ? { credentials } : { keyFilename: keyFile }),
     });
     this.bucketName = config.get<string>('GCP_BUCKET_NAME')!;
   }
