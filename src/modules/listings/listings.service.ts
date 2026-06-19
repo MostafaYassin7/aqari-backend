@@ -10,6 +10,7 @@ import { MediaType } from '../../common/enums/media-type.enum';
 import { Favorite, FavoriteTargetType } from '../engagement/entities/favorite.entity';
 import { Like } from '../engagement/entities/like.entity';
 import { MediaService } from '../media/media.service';
+import { PropertyAdvertisementLicense } from '../property-advertisement-licenses/entities/property-advertisement-license.entity';
 import { SearchService } from '../search/search.service';
 import { User } from '../users/entities/user.entity';
 import { CreateListingDto } from './dto/create-listing.dto';
@@ -32,6 +33,8 @@ export class ListingsService {
     private readonly favoritesRepo: Repository<Favorite>,
     @InjectRepository(Like)
     private readonly likesRepo: Repository<Like>,
+    @InjectRepository(PropertyAdvertisementLicense)
+    private readonly licensesRepo: Repository<PropertyAdvertisementLicense>,
     private readonly algolia: ListingsAlgoliaService,
     private readonly searchService: SearchService,
     private readonly mediaService: MediaService,
@@ -58,8 +61,12 @@ export class ListingsService {
     const pricePerMeter =
       dto.area > 0 ? Number(dto.totalPrice) / Number(dto.area) : null;
 
+    // Extract licenseId before spreading dto into the listing entity.
+    // licenseId is not a column on Listing — it belongs to the license record.
+    const { licenseId, ...listingFields } = dto;
+
     const listing = this.listingsRepo.create({
-      ...dto,
+      ...listingFields,
       ownerId,
       adNumber: this.generateAdNumber(),
       totalPrice: dto.totalPrice.toString(),
@@ -69,6 +76,10 @@ export class ListingsService {
       pricePerMeter: pricePerMeter?.toFixed(2) ?? null,
       commissionPercent: dto.commissionPercent?.toString() ?? null,
       streetWidth: dto.streetWidth?.toString() ?? null,
+      // licenseId present → PENDING (awaiting admin approval before publishing)
+      // no licenseId     → PUBLISHED immediately (host advertiser type only)
+      status: licenseId ? ListingStatus.PENDING : ListingStatus.PUBLISHED,
+      licenseId: licenseId ?? null,
     });
 
     const saved = await this.listingsRepo.save(listing) as Listing;
@@ -89,13 +100,26 @@ export class ListingsService {
       await this.listingsRepo.update(saved.id, { coverPhoto: dto.mediaUrls[0] });
     }
 
+    // ── Link license to listing ──────────────────────────────────────────────
+    if (licenseId) {
+      const license = await this.licensesRepo.findOne({ where: { id: licenseId } });
+      if (!license) throw new NotFoundException('License not found');
+      if (license.advertiserUserId !== ownerId) throw new ForbiddenException('Not authorized');
+      license.listingId = saved.id;
+      await this.licensesRepo.save(license);
+    }
+
     const full = await this.listingsRepo.findOneOrFail({
       where: { id: saved.id },
       relations: { category: true, media: true },
     });
 
-    const owner = await this.loadOwner(ownerId);
-    this.algolia.indexListing(full, owner).catch(() => null);
+    // Sync to Algolia only for published listings (host advertiser type).
+    // Licensed listings (owner/agent/broker) sync after admin approval.
+    if (!licenseId) {
+      const owner = await this.loadOwner(ownerId);
+      this.algolia.indexListing(full, owner).catch(() => null);
+    }
 
     return full;
   }

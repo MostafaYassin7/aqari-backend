@@ -180,6 +180,16 @@ export class Listing extends BaseEntity {
   @Column({ type: 'varchar', nullable: true })
   coverPhoto!: string | null;
 
+  // ─── LICENSE ────────────────────────────────────────────────────────────────
+
+  // معرّف ترخيص الإعلان العقاري
+  // UUID of the PropertyAdvertisementLicense record linked to this listing.
+  // NULL for host listings (no license required).
+  // NULL until the listing is created and linked in the final submit step.
+  // No FK constraint — stored as a plain UUID string.
+  @Column({ type: 'uuid', nullable: true })
+  licenseId!: string | null;
+
   // ─── OWNERSHIP ───────────────────────────────────────────────────────────────
 
   @Column({ type: 'uuid' })

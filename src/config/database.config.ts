@@ -11,7 +11,9 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
     password: config.get<string>('DB_PASSWORD'),
     database: config.get<string>('DB_NAME'),
     autoLoadEntities: true,
-    synchronize: config.get<string>('NODE_ENV') === 'development',
+    synchronize: false,
+    migrations: [__dirname + '/../migrations/*.{ts,js}'],
+    migrationsRun: true,
     logging: config.get<string>('NODE_ENV') === 'development',
   }),
 };

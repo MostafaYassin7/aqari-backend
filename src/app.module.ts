@@ -12,6 +12,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ProjectsModule } from './modules/projects/projects.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
+import { PropertyAdvertisementLicensesModule } from './modules/property-advertisement-licenses/property-advertisement-licenses.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { SearchModule } from './modules/search/search.module';
 import { WalletModule } from './modules/wallet/wallet.module';
@@ -35,6 +36,7 @@ import { UsersModule } from './modules/users/users.module';
     PromotionsModule,
     CrmModule,
     WhatsappModule,
+    PropertyAdvertisementLicensesModule,
   ],
 })
 export class AppModule {}

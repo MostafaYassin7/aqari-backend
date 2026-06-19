@@ -143,4 +143,13 @@ export class CreateListingDto {
   @IsArray()
   @IsString({ each: true })
   mediaUrls?: string[];
+
+  // معرّف ترخيص الإعلان العقاري
+  // UUID of the PropertyAdvertisementLicense record created before this listing.
+  // Required for owner, agent, and broker advertiser types.
+  // Omitted for host — host listings publish immediately without review.
+  @ApiPropertyOptional({ description: 'معرّف ترخيص الإعلان العقاري — from POST /property-advertisement-licenses' })
+  @IsUUID()
+  @IsOptional()
+  licenseId?: string;
 }
