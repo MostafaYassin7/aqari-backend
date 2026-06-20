@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { ListingStatus } from '../../common/enums/listing-status.enum';
 import { MediaType } from '../../common/enums/media-type.enum';
 import { Favorite, FavoriteTargetType } from '../engagement/entities/favorite.entity';
@@ -71,7 +71,7 @@ export class ListingsService {
     let license: PropertyAdvertisementLicense | null = null;
     if (licenseId) {
       license = await this.licensesRepo.findOne({
-        where: { id: licenseId, advertiserUserId: ownerId, listingId: null },
+        where: { id: licenseId, advertiserUserId: ownerId, listingId: IsNull() },
       });
       if (!license) {
         throw new BadRequestException(
