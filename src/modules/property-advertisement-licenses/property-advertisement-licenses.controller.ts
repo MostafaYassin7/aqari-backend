@@ -62,6 +62,25 @@ export class PropertyAdvertisementLicensesController {
     return this.service.getMyLicenses(user.id);
   }
 
+  // ── GET /property-advertisement-licenses/all ─────────────────────────────────
+  // جميع الطلبات — admin: all licenses with optional status filter
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Get('all')
+  @ApiOperation({ summary: 'جميع الطلبات — Admin: all licenses (optional ?status= filter)' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @ApiQuery({ name: 'status', required: false, example: 'pending' })
+  @ApiResponse({ status: 200, description: 'Paginated list of all licenses' })
+  getAllLicenses(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('status') status?: string,
+  ) {
+    return this.service.getAllLicenses(page, limit, status);
+  }
+
   // ── GET /property-advertisement-licenses/pending ──────────────────────────────
   // قائمة الطلبات المعلقة — admin: paginated pending licenses
 

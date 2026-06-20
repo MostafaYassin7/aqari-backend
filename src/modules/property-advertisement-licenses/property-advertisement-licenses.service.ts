@@ -197,6 +197,71 @@ export class PropertyAdvertisementLicensesService {
   // ─── ADMIN QUERIES ────────────────────────────────────────────────────────────
 
   /**
+   * getAllLicenses — جميع طلبات الترخيص (للأدمن)
+   *
+   * Returns a paginated list of all licenses regardless of reviewStatus.
+   * Accepts an optional status filter so the admin can view pending /
+   * approved / rejected separately.
+   * Enriched with advertiserUser and listing the same way as getPendingLicenses.
+   *
+   * @param page   - رقم الصفحة (1-based)
+   * @param limit  - عدد السجلات في الصفحة
+   * @param status - اختياري — filter by reviewStatus ('pending'|'approved'|'rejected')
+   */
+  async getAllLicenses(
+    page: number,
+    limit: number,
+    status?: string,
+  ): Promise<{
+    data: (PropertyAdvertisementLicense & {
+      advertiserUser: Partial<User> | null;
+      listing: Partial<Listing> | null;
+    })[];
+    total: number;
+    page: number;
+    pages: number;
+  }> {
+    const where = status ? { reviewStatus: status } : {};
+
+    const [licenses, total] = await this.repo.findAndCount({
+      where,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const userIds = [...new Set(licenses.map((l) => l.advertiserUserId))];
+    const users = userIds.length
+      ? await this.usersRepo.find({ where: { id: In(userIds) } })
+      : [];
+    const usersMap = new Map(users.map((u) => [u.id, u]));
+
+    const listingIds = licenses
+      .filter((l) => l.listingId)
+      .map((l) => l.listingId!);
+    const listings = listingIds.length
+      ? await this.listingsRepo.find({ where: { id: In(listingIds) } })
+      : [];
+    const listingsMap = new Map(listings.map((l) => [l.id, l]));
+
+    const data = licenses.map((lic) => {
+      const user = usersMap.get(lic.advertiserUserId) ?? null;
+      const listing = lic.listingId ? (listingsMap.get(lic.listingId) ?? null) : null;
+
+      return Object.assign(lic, {
+        advertiserUser: user
+          ? { id: user.id, name: user.name, phone: user.phone, profilePhoto: user.profilePhoto, role: user.role }
+          : null,
+        listing: listing
+          ? { id: listing.id, title: listing.title, city: listing.city, adNumber: listing.adNumber, status: listing.status }
+          : null,
+      });
+    });
+
+    return { data, total, page, pages: Math.ceil(total / limit) };
+  }
+
+  /**
    * getPendingLicenses — قائمة الطلبات المعلقة (للأدمن)
    *
    * Returns a paginated list of all licenses where reviewStatus = 'pending',
