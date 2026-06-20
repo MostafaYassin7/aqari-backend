@@ -17,8 +17,12 @@ import {
 } from '../notifications/entities/notification.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
+import { RegaService } from '../integrations/rega.service';
+import { TourismService } from '../integrations/tourism.service';
 import { CreatePropertyAdvertisementLicenseDto } from './dto/create-property-advertisement-license.dto';
 import { UpdateLicenseReviewStatusDto } from './dto/update-license-review-status.dto';
+import { ValidateBrokerLicenseDto } from './dto/validate-broker-license.dto';
+import { ValidateHostLicenseDto } from './dto/validate-host-license.dto';
 import { PropertyAdvertisementLicense } from './entities/property-advertisement-license.entity';
 
 @Injectable()
@@ -37,6 +41,8 @@ export class PropertyAdvertisementLicensesService {
 
     private readonly notificationsService: NotificationsService,
     private readonly algolia: ListingsAlgoliaService,
+    private readonly regaService: RegaService,
+    private readonly tourismService: TourismService,
   ) {}
 
   // ─── CREATE ──────────────────────────────────────────────────────────────────
@@ -93,6 +99,113 @@ export class PropertyAdvertisementLicensesService {
     );
 
     return saved;
+  }
+
+  // ─── EXTERNAL VALIDATION ─────────────────────────────────────────────────────
+
+  /**
+   * validateAndCreateBrokerRecord
+   * التحقق من ترخيص المسوق وإنشاء سجل مؤقت
+   *
+   * Called from POST /validate-broker endpoint.
+   * Validates broker's ad license with REGA API.
+   *
+   * If valid:
+   *   Creates a TEMPORARY license record with:
+   *     isExternallyValidated = true
+   *     reviewStatus = 'approved'
+   *     All مالك/وكيل fields = null
+   *   Returns licenseId to Flutter.
+   *   Flutter stores this licenseId and sends it
+   *   with POST /listings at the final step.
+   *
+   * If invalid:
+   *   Returns { isValid: false, message }
+   *   No record created.
+   *   Flutter shows error, user stays on step 0c.
+   *
+   * Record lifecycle:
+   *   Created here → linked to listing → DELETED
+   *   immediately after listing is published.
+   *   These records are temporary and not kept.
+   */
+  async validateAndCreateBrokerRecord(
+    userId: string,
+    dto: ValidateBrokerLicenseDto,
+  ): Promise<{ isValid: boolean; licenseId?: string; message?: string }> {
+    // Step 1: Call REGA API
+    const result = await this.regaService.validateBrokerLicense(
+      dto.adLicenseNumber,
+      dto.ownerIdType,
+      dto.ownerIdNumber,
+    );
+
+    // Step 2: If invalid → return error immediately
+    if (!result.isValid) {
+      return {
+        isValid: false,
+        message:
+          result.message ??
+          'رقم ترخيص الإعلان غير صحيح، يرجى التحقق والمحاولة مرة أخرى',
+      };
+    }
+
+    // Step 3: If valid → create temporary record
+    // Only stores proof of validation — no broker numbers stored
+    const license = this.repo.create({
+      advertiserUserId: userId,
+      advertiserType: 'broker',
+      isExternallyValidated: true,
+      reviewStatus: 'approved',
+      listingId: null,
+    });
+    await this.repo.save(license);
+
+    return { isValid: true, licenseId: license.id };
+  }
+
+  /**
+   * validateAndCreateHostRecord
+   * التحقق من رخصة المضيف وإنشاء سجل مؤقت
+   *
+   * Called from POST /validate-host endpoint.
+   * Validates host's tourism license with
+   * Ministry of Tourism API.
+   *
+   * Same lifecycle as broker record:
+   *   Created here → linked to listing → DELETED
+   *   immediately after listing is published.
+   */
+  async validateAndCreateHostRecord(
+    userId: string,
+    dto: ValidateHostLicenseDto,
+  ): Promise<{ isValid: boolean; licenseId?: string; message?: string }> {
+    // Step 1: Call Ministry of Tourism API
+    const result = await this.tourismService.validateHostLicense(
+      dto.tourismLicenseNumber,
+    );
+
+    // Step 2: If invalid → return error
+    if (!result.isValid) {
+      return {
+        isValid: false,
+        message:
+          result.message ??
+          'رقم رخصة وزارة السياحة غير صحيح، يرجى التحقق والمحاولة مرة أخرى',
+      };
+    }
+
+    // Step 3: If valid → create temporary record
+    const license = this.repo.create({
+      advertiserUserId: userId,
+      advertiserType: 'host',
+      isExternallyValidated: true,
+      reviewStatus: 'approved',
+      listingId: null,
+    });
+    await this.repo.save(license);
+
+    return { isValid: true, licenseId: license.id };
   }
 
   // ─── LINK LISTING ────────────────────────────────────────────────────────────

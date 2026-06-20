@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -65,6 +66,33 @@ export class ListingsService {
     // licenseId is not a column on Listing — it belongs to the license record.
     const { licenseId, ...listingFields } = dto;
 
+    // ── Pre-check license before creating listing ────────────────────────────
+    // listingId = null ensures this license has not already been used
+    let license: PropertyAdvertisementLicense | null = null;
+    if (licenseId) {
+      license = await this.licensesRepo.findOne({
+        where: { id: licenseId, advertiserUserId: ownerId, listingId: null },
+      });
+      if (!license) {
+        throw new BadRequestException(
+          'معرّف الترخيص غير صحيح أو تم استخدامه مسبقاً',
+        );
+      }
+    }
+
+    // ── Determine listing status based on license type ───────────────────────
+    // isExternallyValidated = true  → broker/host, validated via API → PUBLISHED
+    // isExternallyValidated = false → owner/agent, needs admin review → PENDING
+    // no licenseId                  → user skipped license step       → DRAFT
+    let status: ListingStatus;
+    if (!license) {
+      status = ListingStatus.DRAFT;
+    } else if (license.isExternallyValidated) {
+      status = ListingStatus.PUBLISHED;
+    } else {
+      status = ListingStatus.PENDING;
+    }
+
     const listing = this.listingsRepo.create({
       ...listingFields,
       ownerId,
@@ -76,9 +104,7 @@ export class ListingsService {
       pricePerMeter: pricePerMeter?.toFixed(2) ?? null,
       commissionPercent: dto.commissionPercent?.toString() ?? null,
       streetWidth: dto.streetWidth?.toString() ?? null,
-      // licenseId present → PENDING (awaiting admin approval before publishing)
-      // no licenseId     → PUBLISHED immediately (host advertiser type only)
-      status: licenseId ? ListingStatus.PENDING : ListingStatus.PUBLISHED,
+      status,
       licenseId: licenseId ?? null,
     });
 
@@ -100,13 +126,16 @@ export class ListingsService {
       await this.listingsRepo.update(saved.id, { coverPhoto: dto.mediaUrls[0] });
     }
 
-    // ── Link license to listing ──────────────────────────────────────────────
-    if (licenseId) {
-      const license = await this.licensesRepo.findOne({ where: { id: licenseId } });
-      if (!license) throw new NotFoundException('License not found');
-      if (license.advertiserUserId !== ownerId) throw new ForbiddenException('Not authorized');
+    // ── Handle license linking and lifecycle ─────────────────────────────────
+    if (license) {
       license.listingId = saved.id;
       await this.licensesRepo.save(license);
+
+      if (license.isExternallyValidated) {
+        // مسوق / مضيف: externally validated → delete temporary record
+        await this.licensesRepo.remove(license);
+      }
+      // مالك / وكيل: keep record permanently for admin review and audit trail
     }
 
     const full = await this.listingsRepo.findOneOrFail({
@@ -114,9 +143,9 @@ export class ListingsService {
       relations: { category: true, media: true },
     });
 
-    // Sync to Algolia only for published listings (host advertiser type).
-    // Licensed listings (owner/agent/broker) sync after admin approval.
-    if (!licenseId) {
+    // Sync to Algolia only for externally-validated listings (broker/host).
+    // Owner/agent listings sync after admin approves the license.
+    if (license?.isExternallyValidated) {
       const owner = await this.loadOwner(ownerId);
       this.algolia.indexListing(full, owner).catch(() => null);
     }

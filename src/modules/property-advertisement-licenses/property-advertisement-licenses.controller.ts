@@ -26,6 +26,8 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { User } from '../users/entities/user.entity';
 import { CreatePropertyAdvertisementLicenseDto } from './dto/create-property-advertisement-license.dto';
 import { UpdateLicenseReviewStatusDto } from './dto/update-license-review-status.dto';
+import { ValidateBrokerLicenseDto } from './dto/validate-broker-license.dto';
+import { ValidateHostLicenseDto } from './dto/validate-host-license.dto';
 import { PropertyAdvertisementLicensesService } from './property-advertisement-licenses.service';
 
 @ApiTags('Property Advertisement Licenses')
@@ -49,6 +51,34 @@ export class PropertyAdvertisementLicensesController {
     @Body() dto: CreatePropertyAdvertisementLicenseDto,
   ) {
     return this.service.createLicense(user.id, dto);
+  }
+
+  // ── POST /property-advertisement-licenses/validate-broker ────────────────────
+  // التحقق من ترخيص المسوق العقاري عبر REGA وإنشاء سجل مؤقت
+
+  @UseGuards(JwtGuard)
+  @Post('validate-broker')
+  @ApiOperation({ summary: 'التحقق من ترخيص المسوق — Validate broker license via REGA and create temporary record' })
+  @ApiResponse({ status: 201, description: '{ isValid: true, licenseId } or { isValid: false, message }' })
+  validateBroker(
+    @GetUser() user: User,
+    @Body() dto: ValidateBrokerLicenseDto,
+  ) {
+    return this.service.validateAndCreateBrokerRecord(user.id, dto);
+  }
+
+  // ── POST /property-advertisement-licenses/validate-host ──────────────────────
+  // التحقق من رخصة المضيف عبر وزارة السياحة وإنشاء سجل مؤقت
+
+  @UseGuards(JwtGuard)
+  @Post('validate-host')
+  @ApiOperation({ summary: 'التحقق من رخصة المضيف — Validate host license via Ministry of Tourism and create temporary record' })
+  @ApiResponse({ status: 201, description: '{ isValid: true, licenseId } or { isValid: false, message }' })
+  validateHost(
+    @GetUser() user: User,
+    @Body() dto: ValidateHostLicenseDto,
+  ) {
+    return this.service.validateAndCreateHostRecord(user.id, dto);
   }
 
   // ── GET /property-advertisement-licenses/my ───────────────────────────────────

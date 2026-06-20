@@ -89,6 +89,26 @@ export class PropertyAdvertisementLicense extends BaseEntity {
   @Column({ type: 'uuid', nullable: true })
   reviewedByAdminId!: string | null;
 
+  // هل تم التحقق من الترخيص عبر جهة خارجية؟
+  // Indicates whether this license record was validated
+  // externally via a third-party government API
+  // (REGA for brokers, Ministry of Tourism for hosts).
+  //
+  // false → مالك / وكيل
+  //   Submitted by owner or agent.
+  //   Requires manual admin review.
+  //   Record kept permanently for legal audit trail.
+  //
+  // true → مسوق / مضيف
+  //   Validated automatically via external API.
+  //   No admin review needed.
+  //   Record is TEMPORARY — deleted after listing created.
+  //
+  // Used by: all advertiser types
+  // Required: NO (defaults to false)
+  @Column({ type: 'boolean', default: false })
+  isExternallyValidated!: boolean;
+
   // ── PROPERTY OWNERSHIP DOCUMENT ──────────────────────────────────────────────
   // الأقسام التالية تخص وثيقة ملكية العقار
   // Used by: advertiserType = 'owner' AND 'agent'
@@ -223,26 +243,4 @@ export class PropertyAdvertisementLicense extends BaseEntity {
   @Column({ type: 'varchar', nullable: true })
   agentPhone!: string | null;
 
-  // ── LICENSED BROKER-SPECIFIC FIELDS ──────────────────────────────────────────
-  // الحقول الخاصة بالمسوق العقاري المرخص (advertiserType = 'broker' ONLY)
-
-  // رقم رخصة فال للوساطة والتسويق العقاري
-  // FAL license number issued by the General Real Estate Authority (REGA).
-  // Mandatory for all licensed real estate brokers operating in Saudi Arabia.
-  // Without a valid FAL license, a broker cannot legally advertise property.
-  // Used by: advertiserType = 'broker' ONLY
-  // Required: YES when advertiserType = 'broker'
-  @Column({ type: 'varchar', nullable: true })
-  falLicenseNumber!: string | null;
-
-  // رقم عقد الوساطة المسجل مع مالك العقار
-  // Brokerage contract number registered on the REGA platform
-  // (eservicesredp.rega.gov.sa) between the broker and the property owner.
-  // CRITICAL: Both FAL license AND brokerage contract are required.
-  // A valid FAL license alone is not sufficient — the contract proves
-  // the broker has a signed agreement with the owner for THIS property.
-  // Used by: advertiserType = 'broker' ONLY
-  // Required: YES when advertiserType = 'broker'
-  @Column({ type: 'varchar', nullable: true })
-  brokerageContractNumber!: string | null;
 }

@@ -106,15 +106,4 @@ export class CreatePropertyAdvertisementLicenseDto {
   @IsOptional()
   agentPhone?: string;
 
-  // رقم رخصة فال — broker ONLY
-  @ApiPropertyOptional({ description: 'رقم رخصة فال للوساطة والتسويق العقاري (للمسوق فقط)' })
-  @IsString()
-  @IsOptional()
-  falLicenseNumber?: string;
-
-  // رقم عقد الوساطة المسجل على منصة الهيئة العامة للعقار — broker ONLY
-  @ApiPropertyOptional({ description: 'رقم عقد الوساطة المسجل على منصة الهيئة العامة للعقار (للمسوق فقط)' })
-  @IsString()
-  @IsOptional()
-  brokerageContractNumber?: string;
 }
