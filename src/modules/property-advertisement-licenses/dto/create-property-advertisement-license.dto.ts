@@ -40,17 +40,29 @@ export class CreatePropertyAdvertisementLicenseDto {
   @IsIn(['national_id', 'commercial_registration', 'unified_700'])
   propertyOwnerIdType?: string;
 
-  // رقم هوية المالك
-  @ApiPropertyOptional({ description: 'رقم هوية المالك' })
-  @IsString()
-  @IsOptional()
-  propertyOwnerIdNumber?: string;
-
   // تاريخ ميلاد المالك — required for individuals (national_id) only
   @ApiPropertyOptional({ description: 'تاريخ ميلاد المالك', example: '1990-01-15' })
   @IsString()
   @IsOptional()
   propertyOwnerBirthDate?: string;
+
+  // رقم الهوية الوطنية للمالك — filled ONLY when propertyOwnerIdType = 'national_id'
+  @ApiPropertyOptional({ description: 'رقم الهوية الوطنية للمالك (عند نوع الهوية: هوية وطنية)' })
+  @IsString()
+  @IsOptional()
+  ownerNationalIdNumber?: string;
+
+  // رقم السجل التجاري للمنشأة المالكة — filled ONLY when propertyOwnerIdType = 'commercial_registration'
+  @ApiPropertyOptional({ description: 'رقم السجل التجاري للمنشأة المالكة للعقار (عند نوع الهوية: سجل تجاري)' })
+  @IsString()
+  @IsOptional()
+  ownerCommercialRegNumber?: string;
+
+  // الرقم الموحد 700 للمنشأة المالكة — filled ONLY when propertyOwnerIdType = 'unified_700'
+  @ApiPropertyOptional({ description: 'الرقم الموحد 700 للمنشأة المالكة للعقار (عند نوع الهوية: الرقم الموحد 700)' })
+  @IsString()
+  @IsOptional()
+  ownerUnifiedNumber?: string;
 
   // هل التاريخ بالتقويم الهجري؟
   @ApiPropertyOptional({ description: 'هل تاريخ الميلاد بالتقويم الهجري؟', default: true })
@@ -69,12 +81,6 @@ export class CreatePropertyAdvertisementLicenseDto {
   @IsString()
   @IsOptional()
   oneOfOwnersNationalId?: string;
-
-  // رقم السجل التجاري للمنشأة
-  @ApiPropertyOptional({ description: 'رقم السجل التجاري للمنشأة المالكة للعقار' })
-  @IsString()
-  @IsOptional()
-  establishmentCommercialRegNumber?: string;
 
   // رقم الوكالة الرسمية (وزارة العدل) — agent ONLY
   @ApiPropertyOptional({ description: 'رقم الوكالة الرسمية — صادرة من وزارة العدل (للوكيل فقط)' })

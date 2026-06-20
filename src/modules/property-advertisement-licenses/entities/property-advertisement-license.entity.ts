@@ -129,13 +129,6 @@ export class PropertyAdvertisementLicense extends BaseEntity {
   @Column({ type: 'varchar', nullable: true })
   propertyOwnerIdType!: string | null;
 
-  // رقم هوية المالك
-  // The actual identity document number of the property owner.
-  // Used by: advertiserType = 'owner', 'agent', 'broker'
-  // Required: YES for owner, agent, broker
-  @Column({ type: 'varchar', nullable: true })
-  propertyOwnerIdNumber!: string | null;
-
   // تاريخ ميلاد المالك
   // Date of birth of the property owner.
   // Required for individuals (propertyOwnerIdType = 'national_id') only.
@@ -144,6 +137,33 @@ export class PropertyAdvertisementLicense extends BaseEntity {
   // Required: Conditional — only when propertyOwnerIdType = 'national_id'
   @Column({ type: 'date', nullable: true })
   propertyOwnerBirthDate!: string | null;
+
+  // رقم الهوية الوطنية للمالك
+  // Filled ONLY when propertyOwnerIdType = 'national_id'
+  // Individual Saudi citizens who personally own the property
+  // NULL when propertyOwnerIdType is anything else
+  // Used by: owner, agent, broker (when owner is individual)
+  // Required: YES when propertyOwnerIdType = 'national_id'
+  @Column({ type: 'varchar', nullable: true })
+  ownerNationalIdNumber!: string | null;
+
+  // رقم السجل التجاري للمنشأة المالكة للعقار
+  // Filled ONLY when propertyOwnerIdType = 'commercial_registration'
+  // The company that legally owns the property
+  // NULL when propertyOwnerIdType is anything else
+  // Used by: owner, agent, broker (when owner is a company)
+  // Required: YES when propertyOwnerIdType = 'commercial_registration'
+  @Column({ type: 'varchar', nullable: true })
+  ownerCommercialRegNumber!: string | null;
+
+  // الرقم الموحد 700 للمنشأة المالكة للعقار
+  // Filled ONLY when propertyOwnerIdType = 'unified_700'
+  // Large Saudi corporations and government entities
+  // NULL when propertyOwnerIdType is anything else
+  // Used by: owner, agent, broker (when owner is large corporation)
+  // Required: YES when propertyOwnerIdType = 'unified_700'
+  @Column({ type: 'varchar', nullable: true })
+  ownerUnifiedNumber!: string | null;
 
   // هل التاريخ المُدخَل بالتقويم الهجري؟
   // Indicates whether propertyOwnerBirthDate is entered in the Hijri calendar.
@@ -168,18 +188,6 @@ export class PropertyAdvertisementLicense extends BaseEntity {
   // Required: NO (only when multiple owners exist)
   @Column({ type: 'varchar', nullable: true })
   oneOfOwnersNationalId!: string | null;
-
-  // ── ESTABLISHMENT INFO ────────────────────────────────────────────────────────
-  // معلومات المنشأة (عند كون المالك شركة أو مؤسسة)
-
-  // رقم السجل التجاري للمنشأة المالكة للعقار
-  // Commercial registration number of the company or establishment
-  // that legally owns the property being advertised.
-  // Used by: advertiserType = 'owner', 'agent', 'broker'
-  //          (only when propertyOwnerIdType = 'commercial_registration')
-  // Required: Conditional — only when owner is a company/establishment
-  @Column({ type: 'varchar', nullable: true })
-  establishmentCommercialRegNumber!: string | null;
 
   // ── AGENT-SPECIFIC FIELDS ─────────────────────────────────────────────────────
   // الحقول الخاصة بالوكيل (advertiserType = 'agent' ONLY)

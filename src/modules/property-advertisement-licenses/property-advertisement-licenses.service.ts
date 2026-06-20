@@ -61,6 +61,23 @@ export class PropertyAdvertisementLicensesService {
     userId: string,
     dto: CreatePropertyAdvertisementLicenseDto,
   ): Promise<PropertyAdvertisementLicense> {
+    // Enforce mutual exclusivity of owner ID number fields based on propertyOwnerIdType.
+    // Only one of the three fields should ever be non-null; clear the others here
+    // so stale values from a previous selection cannot pollute the saved record.
+    if (dto.propertyOwnerIdType === 'national_id') {
+      dto.ownerCommercialRegNumber = undefined;
+      dto.ownerUnifiedNumber = undefined;
+      // propertyOwnerBirthDate is required for national_id — left as-is
+    } else if (dto.propertyOwnerIdType === 'commercial_registration') {
+      dto.ownerNationalIdNumber = undefined;
+      dto.ownerUnifiedNumber = undefined;
+      dto.propertyOwnerBirthDate = undefined; // companies have no birth date
+    } else if (dto.propertyOwnerIdType === 'unified_700') {
+      dto.ownerNationalIdNumber = undefined;
+      dto.ownerCommercialRegNumber = undefined;
+      dto.propertyOwnerBirthDate = undefined; // corporations have no birth date
+    }
+
     const license = this.repo.create({
       ...dto,
       advertiserUserId: userId,
