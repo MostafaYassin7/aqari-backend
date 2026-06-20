@@ -168,15 +168,22 @@ export class ListingsService {
     });
     if (!listing) throw new NotFoundException('Listing not found');
 
-    const [favoriteCount, likeCount] = await Promise.all([
+    const [favoriteCount, likeCount, owner] = await Promise.all([
       this.favoritesRepo.count({ where: { targetType: FavoriteTargetType.LISTING, targetId: id } }),
       this.likesRepo.count({ where: { listingId: id } }),
+      this.usersRepo.findOne({
+        where: { id: listing.ownerId },
+        select: ['id', 'name', 'phone', 'profilePhoto', 'role'],
+      }),
     ]);
 
     // Fire and forget view count increment
     this.listingsRepo.increment({ id }, 'viewCount', 1).catch(() => null);
 
     return Object.assign(listing, {
+      __owner__: owner
+        ? { name: owner.name, phone: owner.phone, profilePhoto: owner.profilePhoto, role: owner.role }
+        : null,
       stats: {
         viewCount: listing.viewCount,
         messageCount: listing.messageCount,
