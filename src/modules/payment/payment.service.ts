@@ -202,7 +202,7 @@ export class PaymentService {
 
     const orderedString = Object.keys(data)
       .sort((a, b) => a.localeCompare(b))
-      .map((key) => `${key}=${data[key] ?? ''}`)
+      .map((key) => `${key}=${String(data[key] ?? '')}`)
       .join(',');
 
     const hash = crypto
