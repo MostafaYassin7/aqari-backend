@@ -194,7 +194,7 @@ export class PaymentService {
   // ─── SIGNATURE VALIDATION ────────────────────────────────────────────────────
 
   validateSignature(bodyData: MfWebhookBody, secret: string, myFatoorahSignature: string): boolean {
-    const data: Record<string, unknown> = { ...bodyData.Data };
+    const data = { ...bodyData.Data } as Record<string, string | number | boolean | null | undefined>;
 
     if (bodyData.Event === 'RefundStatusChanged') {
       delete data['GatewayReference'];
