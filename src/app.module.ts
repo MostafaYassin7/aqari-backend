@@ -17,6 +17,7 @@ import { PropertyAdvertisementLicensesModule } from './modules/property-advertis
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { SearchModule } from './modules/search/search.module';
 import { WalletModule } from './modules/wallet/wallet.module';
+import { PaymentModule } from './modules/payment/payment.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { UsersModule } from './modules/users/users.module';
     NotificationsModule,
     ChatModule,
     WalletModule,
+    PaymentModule,
     MediaModule,
     PromotionsModule,
     CrmModule,

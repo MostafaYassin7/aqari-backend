@@ -2,15 +2,15 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
-export class TopUpDto {
-  @ApiProperty({ example: 500 })
+export class InitiateSessionDto {
+  @ApiProperty({ example: 100 })
   @Type(() => Number)
   @IsNumber()
   @Min(1)
-  amount!: number;
+  invoiceAmount!: number;
 
-  @ApiPropertyOptional({ example: 'card' })
+  @ApiPropertyOptional({ example: 'SAR' })
   @IsOptional()
   @IsString()
-  paymentMethod?: string;
+  currencyIso?: string;
 }

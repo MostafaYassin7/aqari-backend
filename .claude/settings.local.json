@@ -12,7 +12,8 @@
       "Bash(cd /d \"D:\\\\Aqar\\\\aqar-backend\")",
       "Bash(dir)",
       "Bash(cd /d D:\\\\Aqar\\\\aqar-backend)",
-      "Bash(powershell -Command \"ls\")"
+      "Bash(powershell -Command \"ls\")",
+      "WebFetch(domain:docs.myfatoorah.com)"
     ]
   }
 }

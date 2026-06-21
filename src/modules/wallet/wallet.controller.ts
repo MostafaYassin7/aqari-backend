@@ -1,8 +1,6 @@
 import {
-  Body,
   Controller,
   Get,
-  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -16,7 +14,6 @@ import { GetUser } from '../../common/decorators/get-user.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { User } from '../users/entities/user.entity';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
-import { TopUpDto } from './dto/top-up.dto';
 import { WalletService } from './wallet.service';
 
 @ApiTags('Wallet')
@@ -30,16 +27,6 @@ export class WalletController {
   @ApiOperation({ summary: 'Get wallet balance' })
   getBalance(@GetUser() user: User) {
     return this.walletService.getBalance(user.id);
-  }
-
-  @Post('top-up')
-  @ApiOperation({ summary: 'Top up wallet balance' })
-  topUp(@GetUser() user: User, @Body() dto: TopUpDto) {
-    return this.walletService.topUp(
-      user.id,
-      dto.amount,
-      dto.paymentMethod ?? 'manual',
-    );
   }
 
   @Get('transactions')
