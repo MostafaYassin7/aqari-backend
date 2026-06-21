@@ -11,6 +11,42 @@ import { WalletService } from '../wallet/wallet.service';
 import { ExecutePaymentDto } from './dto/execute-payment.dto';
 import { Payment, PaymentStatus, PaymentType } from './entities/payment.entity';
 
+// ─── MyFatoorah response shapes ──────────────────────────────────────────────
+
+export interface MfResponse<T> {
+  IsSuccess: boolean;
+  Message: string;
+  Data: T;
+}
+
+export interface MfSessionData {
+  SessionId: string;
+  CountryCode: string;
+}
+
+interface MfExecuteData {
+  InvoiceId: number;
+  PaymentURL: string | null;
+}
+
+interface MfPaymentStatusData {
+  InvoiceStatus: string;
+  InvoiceError?: string;
+}
+
+export interface MfWebhookBody {
+  EventType?: unknown;
+  Event?: string;
+  Data?: {
+    TransactionStatus?: string;
+    InvoiceId?: number | string;
+    GatewayReference?: unknown;
+    [key: string]: unknown;
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Injectable()
 export class PaymentService {
   private readonly baseUrl: string;
@@ -39,39 +75,39 @@ export class PaymentService {
 
   // ─── MYFATOORAH API ──────────────────────────────────────────────────────────
 
-  async initiateSession(invoiceAmount: number, currencyIso?: string) {
+  async initiateSession(invoiceAmount: number, currencyIso?: string): Promise<MfResponse<MfSessionData>> {
     const res = await fetch(`${this.baseUrl}/v2/InitiateSession`, {
       method: 'POST',
       headers: this.buildHeaders(),
       body: JSON.stringify({ InvoiceAmount: invoiceAmount, CurrencyIso: currencyIso ?? this.defaultCurrency }),
     });
-    const data = await res.json() as any;
+    const data = await res.json() as MfResponse<MfSessionData>;
     if (!data.IsSuccess) {
       throw new BadRequestException(data.Message ?? 'MyFatoorah InitiateSession failed');
     }
     return data;
   }
 
-  private async callExecutePayment(paymentData: Record<string, any>) {
+  private async callExecutePayment(paymentData: Record<string, unknown>): Promise<MfResponse<MfExecuteData>> {
     const res = await fetch(`${this.baseUrl}/v2/ExecutePayment`, {
       method: 'POST',
       headers: this.buildHeaders(),
       body: JSON.stringify(paymentData),
     });
-    const data = await res.json() as any;
+    const data = await res.json() as MfResponse<MfExecuteData>;
     if (!data.IsSuccess) {
       throw new BadRequestException(data.Message ?? 'MyFatoorah ExecutePayment failed');
     }
     return data;
   }
 
-  private async getPaymentStatus(invoiceId: string) {
+  private async getPaymentStatus(invoiceId: string): Promise<MfResponse<MfPaymentStatusData>> {
     const res = await fetch(`${this.baseUrl}/v2/GetPaymentStatus`, {
       method: 'POST',
       headers: this.buildHeaders(),
       body: JSON.stringify({ Key: invoiceId, KeyType: 'InvoiceId' }),
     });
-    const data = await res.json() as any;
+    const data = await res.json() as MfResponse<MfPaymentStatusData>;
     if (!data.IsSuccess) {
       throw new BadRequestException(data.Message ?? 'MyFatoorah GetPaymentStatus failed');
     }
@@ -114,7 +150,7 @@ export class PaymentService {
 
   // ─── WEBHOOK ─────────────────────────────────────────────────────────────────
 
-  async handleWebhook(body: any, signature?: string): Promise<void> {
+  async handleWebhook(body: MfWebhookBody, signature?: string): Promise<void> {
     if (this.webhookSecret && signature) {
       const isValid = this.validateSignature(body, this.webhookSecret, signature);
       if (!isValid) throw new BadRequestException('Invalid webhook signature');
@@ -123,12 +159,10 @@ export class PaymentService {
     if (!body.EventType || !body.Data) return;
 
     const eventType = Number(body.EventType);
-    const transactionStatus = body.Data?.TransactionStatus?.toUpperCase() as string;
-    const invoiceId = String(body.Data?.InvoiceId ?? '');
+    const transactionStatus = body.Data.TransactionStatus?.toUpperCase();
+    const invoiceId = String(body.Data.InvoiceId ?? '');
 
-    if (!invoiceId) return;
-
-    if (eventType !== 1) return;
+    if (!invoiceId || eventType !== 1) return;
 
     const payment = await this.paymentRepository.findOne({ where: { invoiceId } });
     if (!payment) return;
@@ -148,7 +182,7 @@ export class PaymentService {
       // PaymentType.RESERVATION and PaymentType.PROMOTION handled when implemented
     } else if (transactionStatus === 'FAILED') {
       const statusRes = await this.getPaymentStatus(invoiceId);
-      const errorMsg = statusRes.Data?.InvoiceError ?? 'Payment failed';
+      const errorMsg = statusRes.Data.InvoiceError ?? 'Payment failed';
 
       await this.paymentRepository.update(payment.id, {
         paymentStatus: PaymentStatus.FAILED,
@@ -159,15 +193,15 @@ export class PaymentService {
 
   // ─── SIGNATURE VALIDATION ────────────────────────────────────────────────────
 
-  validateSignature(bodyData: any, secret: string, myFatoorahSignature: string): boolean {
-    const data = { ...bodyData['Data'] };
+  validateSignature(bodyData: MfWebhookBody, secret: string, myFatoorahSignature: string): boolean {
+    const data: Record<string, unknown> = { ...bodyData.Data };
 
-    if (bodyData['Event'] === 'RefundStatusChanged') {
+    if (bodyData.Event === 'RefundStatusChanged') {
       delete data['GatewayReference'];
     }
 
-    const orderedKeys = Object.keys(data).sort((a, b) => a.localeCompare(b));
-    let orderedString = orderedKeys
+    const orderedString = Object.keys(data)
+      .sort((a, b) => a.localeCompare(b))
       .map((key) => `${key}=${data[key] ?? ''}`)
       .join(',');
 

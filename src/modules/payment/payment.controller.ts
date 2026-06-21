@@ -13,7 +13,7 @@ import { JwtGuard } from '../../common/guards/jwt.guard';
 import { User } from '../users/entities/user.entity';
 import { ExecutePaymentDto } from './dto/execute-payment.dto';
 import { InitiateSessionDto } from './dto/initiate-session.dto';
-import { PaymentService } from './payment.service';
+import { PaymentService, MfWebhookBody } from './payment.service';
 
 @ApiTags('Payment')
 @UseGuards(JwtGuard)
@@ -40,7 +40,7 @@ export class PaymentController {
   @HttpCode(200)
   @ApiOperation({ summary: 'MyFatoorah webhook — payment status changes' })
   async webhook(
-    @Body() body: any,
+    @Body() body: MfWebhookBody,
     @Headers('x-myfatoorah-signature') signature?: string,
   ) {
     await this.paymentService.handleWebhook(body, signature);

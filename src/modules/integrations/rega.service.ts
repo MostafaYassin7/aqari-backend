@@ -19,14 +19,14 @@ export class RegaService {
    *   isValid: true  → license is valid, proceed
    *   isValid: false → license invalid, show message to user
    */
-  async validateBrokerLicense(
-    adLicenseNumber: string,
-    ownerIdType: string,
-    ownerIdNumber: string,
+  validateBrokerLicense(
+    _adLicenseNumber: string,
+    _ownerIdType: string,
+    _ownerIdNumber: string,
   ): Promise<{ isValid: boolean; message?: string }> {
     // ── PLACEHOLDER ──────────────────────────────────
     // Real REGA API call goes here when integration ready
     // For now: always returns valid for testing
-    return { isValid: true };
+    return Promise.resolve({ isValid: true });
   }
 }

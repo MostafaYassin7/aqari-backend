@@ -19,12 +19,12 @@ export class TourismService {
    *   isValid: true  → license valid, proceed
    *   isValid: false → license invalid, show message
    */
-  async validateHostLicense(
-    tourismLicenseNumber: string,
+  validateHostLicense(
+    _tourismLicenseNumber: string,
   ): Promise<{ isValid: boolean; message?: string }> {
     // ── PLACEHOLDER ──────────────────────────────────
     // Real Ministry of Tourism API call goes here
     // For now: always returns valid for testing
-    return { isValid: true };
+    return Promise.resolve({ isValid: true });
   }
 }
