@@ -63,13 +63,13 @@ export class PaymentService {
   ) {
     const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
     this.baseUrl = isProduction
-      ? this.configService.getOrThrow<string>('MYFATOORAH_LIVE_SA__BASE_URL')
-      : this.configService.getOrThrow<string>('MYFATOORAH_TEST_BASE_URL');
+      ? this.configService.get<string>('MYFATOORAH_LIVE_SA__BASE_URL', 'https://api-sa.myfatoorah.com')
+      : this.configService.get<string>('MYFATOORAH_TEST_BASE_URL', 'https://apitest.myfatoorah.com');
     this.token = isProduction
-      ? this.configService.getOrThrow<string>('MYFATOORAH_LIVE_TOKEN')
-      : this.configService.getOrThrow<string>('MYFATOORAH_TEST_TOKEN');
+      ? this.configService.get<string>('MYFATOORAH_LIVE_TOKEN', '')
+      : this.configService.get<string>('MYFATOORAH_TEST_TOKEN', '');
     this.defaultCurrency = isProduction ? 'SAR' : 'KWD';
-    this.callbackUrl = this.configService.getOrThrow<string>('MYFATOORAH_CALLBACK_URL');
+    this.callbackUrl = this.configService.get<string>('MYFATOORAH_CALLBACK_URL', '');
     this.webhookSecret = this.configService.get<string>('MYFATOORAH_WEBHOOK_SECRET');
   }
 
