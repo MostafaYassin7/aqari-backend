@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
 
 dotenv.config();
-
+///t
 // Used by TypeORM CLI for migration:generate / migration:run / migration:revert.
 // DB_HOST in .env is 'postgres' (Docker service name inside docker-compose).
 // When running CLI locally outside Docker, override:
