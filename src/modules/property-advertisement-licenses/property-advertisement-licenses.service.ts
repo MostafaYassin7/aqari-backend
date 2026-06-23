@@ -68,22 +68,52 @@ export class PropertyAdvertisementLicensesService {
     dto: CreatePropertyAdvertisementLicenseDto,
   ): Promise<PropertyAdvertisementLicense> {
     // Enforce mutual exclusivity of owner ID number fields based on propertyOwnerIdType.
-    // Only one of the three fields should ever be non-null; clear the others here
-    // so stale values from a previous selection cannot pollute the saved record.
     if (dto.propertyOwnerIdType === 'national_id') {
       dto.ownerCommercialRegNumber = undefined;
       dto.ownerUnifiedNumber = undefined;
-      // propertyOwnerBirthDate is required for national_id — left as-is
     } else if (dto.propertyOwnerIdType === 'commercial_registration') {
       dto.ownerNationalIdNumber = undefined;
       dto.ownerUnifiedNumber = undefined;
-      dto.propertyOwnerBirthDate = undefined; // companies have no birth date
+      dto.propertyOwnerBirthDate = undefined;
     } else if (dto.propertyOwnerIdType === 'unified_700') {
       dto.ownerNationalIdNumber = undefined;
       dto.ownerCommercialRegNumber = undefined;
-      dto.propertyOwnerBirthDate = undefined; // corporations have no birth date
+      dto.propertyOwnerBirthDate = undefined;
     }
 
+    // ── Path A: completing license for an existing DRAFT listing ─────────────
+    if (dto.listingId) {
+      const listing = await this.listingsRepo.findOne({ where: { id: dto.listingId } });
+      if (!listing) {
+        throw new NotFoundException('الإعلان غير موجود');
+      }
+      if (listing.ownerId !== userId) {
+        throw new ForbiddenException('غير مصرح لك بتعديل هذا الإعلان');
+      }
+      if (listing.status !== ListingStatus.DRAFT) {
+        throw new BadRequestException('لا يمكن إضافة ترخيص لإعلان غير مسودة');
+      }
+
+      const license = this.repo.create({
+        ...dto,
+        advertiserUserId: userId,
+        listingId: dto.listingId,
+        reviewStatus: 'pending',
+        isExternallyValidated: false,
+      });
+      const saved = await this.repo.save(license);
+
+      listing.status = ListingStatus.PENDING;
+      await this.listingsRepo.save(listing);
+
+      this.notifyAdminsOfNewLicense(saved.id).catch((err) =>
+        this.logger.error(`Admin notification failed for license ${saved.id}`, err),
+      );
+
+      return saved;
+    }
+
+    // ── Path B: new license during add listing flow (listingId linked later) ─
     const license = this.repo.create({
       ...dto,
       advertiserUserId: userId,
@@ -93,7 +123,6 @@ export class PropertyAdvertisementLicensesService {
 
     const saved = await this.repo.save(license);
 
-    // Notify admins asynchronously — failure must not break the response
     this.notifyAdminsOfNewLicense(saved.id).catch((err) =>
       this.logger.error(`Admin notification failed for license ${saved.id}`, err),
     );

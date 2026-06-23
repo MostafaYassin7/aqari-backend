@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -143,6 +144,13 @@ export class CreateListingDto {
   @IsArray()
   @IsString({ each: true })
   mediaUrls?: string[];
+
+  // نوع المُعلن — used to enforce license requirement per type
+  @ApiPropertyOptional({ enum: ['owner', 'agent', 'broker', 'host'] })
+  @IsString()
+  @IsIn(['owner', 'agent', 'broker', 'host'])
+  @IsOptional()
+  advertiserType?: string;
 
   // معرّف ترخيص الإعلان العقاري
   // UUID of the PropertyAdvertisementLicense record created before this listing.

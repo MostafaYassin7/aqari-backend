@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreatePropertyAdvertisementLicenseDto {
   // نوع المُعلن — determines which fields are required for this license.
@@ -105,5 +105,15 @@ export class CreatePropertyAdvertisementLicenseDto {
   @IsString()
   @IsOptional()
   agentPhone?: string;
+
+  // معرّف الإعلان المسودة
+  // UUID of an existing DRAFT listing.
+  // Only provided when user is completing license info
+  // for an existing draft listing from My Listings screen.
+  // NULL when creating license during the add listing flow.
+  @ApiPropertyOptional({ description: 'معرّف الإعلان المسودة — يُرسَل فقط عند استكمال الترخيص لإعلان موجود' })
+  @IsOptional()
+  @IsUUID()
+  listingId?: string;
 
 }

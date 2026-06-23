@@ -62,9 +62,8 @@ export class ListingsService {
     const pricePerMeter =
       dto.area > 0 ? Number(dto.totalPrice) / Number(dto.area) : null;
 
-    // Extract licenseId before spreading dto into the listing entity.
-    // licenseId is not a column on Listing — it belongs to the license record.
-    const { licenseId, ...listingFields } = dto;
+    // Extract fields that are not columns on Listing before spreading.
+    const { licenseId, advertiserType, ...listingFields } = dto;
 
     // ── Pre-check license before creating listing ────────────────────────────
     // listingId = null ensures this license has not already been used
@@ -83,9 +82,16 @@ export class ListingsService {
     // ── Determine listing status based on license type ───────────────────────
     // isExternallyValidated = true  → broker/host, validated via API → PUBLISHED
     // isExternallyValidated = false → owner/agent, needs admin review → PENDING
-    // no licenseId                  → user skipped license step       → DRAFT
+    // no licenseId + broker/host    → license is mandatory, reject
+    // no licenseId + owner/agent    → user skipped license step       → DRAFT
     let status: ListingStatus;
     if (!license) {
+      if (advertiserType === 'broker') {
+        throw new BadRequestException('رقم ترخيص الإعلان مطلوب للمسوق العقاري');
+      }
+      if (advertiserType === 'host') {
+        throw new BadRequestException('رخصة وزارة السياحة مطلوبة للمضيف');
+      }
       status = ListingStatus.DRAFT;
     } else if (license.isExternallyValidated) {
       status = ListingStatus.PUBLISHED;
