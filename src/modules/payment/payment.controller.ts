@@ -1,12 +1,16 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   Post,
+  Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
@@ -33,6 +37,14 @@ export class PaymentController {
   @ApiOperation({ summary: 'Execute wallet top-up payment' })
   executeTopUp(@GetUser() user: User, @Body() dto: ExecutePaymentDto) {
     return this.paymentService.executeTopUp(user, dto);
+  }
+
+  @Get('callback')
+  @Public()
+  @ApiOperation({ summary: 'MyFatoorah post-3DS redirect — forwards browser to the web app' })
+  callback(@Query('failed') failed: string, @Res() res: Response) {
+    const base = 'https://aqora.sa/ar/account/wallet';
+    res.redirect(failed ? `${base}?payment=error` : `${base}?payment=success`);
   }
 
   @Post('webhook')

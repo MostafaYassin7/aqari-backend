@@ -128,7 +128,7 @@ export class PaymentService {
       CustomerName: user.name ?? 'Customer',
       CustomerEmail: user.email ?? `${user.id}@aqar.app`,
       CallBackUrl: this.callbackUrl,
-      ErrorUrl: this.callbackUrl,
+      ErrorUrl: `${this.callbackUrl}?failed=1`,
       Language: 'en',
       CustomerReference: user.id,
       InvoiceItems: [{ ItemName: 'Wallet Top-up', Quantity: 1, UnitPrice: dto.invoiceValue }],
