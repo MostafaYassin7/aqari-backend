@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { databaseConfig } from './config/database.config';
 import { AuthModule } from './modules/auth/auth.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { MediaModule } from './modules/media/media.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
@@ -28,6 +29,7 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     AuthModule,
     ListingsModule,
+    BookingsModule,
     SearchModule,
     EngagementModule,
     ProjectsModule,

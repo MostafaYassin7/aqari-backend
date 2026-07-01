@@ -63,7 +63,10 @@ export class ListingsService {
       dto.area > 0 ? Number(dto.totalPrice) / Number(dto.area) : null;
 
     // Extract fields that are not columns on Listing before spreading.
-    const { licenseId, advertiserType, ...listingFields } = dto;
+    // pricePerHalfDay is destructured out separately since it's a decimal
+    // column (string | null) but a number on the DTO — same treatment as
+    // totalPrice/pricePerMeter/commissionPercent/streetWidth below.
+    const { licenseId, advertiserType, pricePerHalfDay, ...listingFields } = dto;
 
     // ── Pre-check license before creating listing ────────────────────────────
     // listingId = null ensures this license has not already been used
@@ -110,6 +113,7 @@ export class ListingsService {
       pricePerMeter: pricePerMeter?.toFixed(2) ?? null,
       commissionPercent: dto.commissionPercent?.toString() ?? null,
       streetWidth: dto.streetWidth?.toString() ?? null,
+      pricePerHalfDay: pricePerHalfDay?.toString() ?? null,
       status,
       licenseId: licenseId ?? null,
     });

@@ -127,6 +127,38 @@ export class Listing extends BaseEntity {
   @Column({ type: 'boolean', default: false })
   hasSpecialEntrance!: boolean;
 
+  // ─── BOOKABLE LISTING FIELDS ──────────────────────────────────────────────────
+  // Used when listingType = 'rent_short' OR propertyType = 'event_hall'
+
+  // الطاقة الاستيعابية القصوى
+  // Required for event halls, optional for daily rentals
+  @Column({ type: 'int', nullable: true })
+  maxGuests!: number | null;
+
+  // وقت تسجيل الوصول — "HH:mm" e.g. "14:00" — daily rentals only
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  checkInTime!: string | null;
+
+  // وقت تسجيل المغادرة — "HH:mm" e.g. "12:00" — daily rentals only
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  checkOutTime!: string | null;
+
+  // الحد الأدنى لعدد الليالي — daily rentals only
+  @Column({ type: 'int', nullable: true, default: 1 })
+  minNights!: number | null;
+
+  // ─── EVENT HALL SPECIFIC ──────────────────────────────────────────────────────
+  // Only when propertyType = 'event_hall'
+
+  // سعر الفترة الصباحية أو المسائية — totalPrice = full day, this column = half day
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  pricePerHalfDay!: string | null;
+
+  // الخدمات المشمولة في السعر — stored as JSONB array of strings
+  // Allowed values: 'catering', 'sound_system', 'projector', 'decoration', 'security', 'parking'
+  @Column({ type: 'jsonb', nullable: true })
+  includedServices!: string[] | null;
+
   // ─── CHECKLIST ───────────────────────────────────────────────────────────────
 
   @Column({ type: 'boolean', default: false })

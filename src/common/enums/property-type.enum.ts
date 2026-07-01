@@ -13,4 +13,5 @@ export enum PropertyType {
   WAREHOUSE = 'warehouse',
   CAMP = 'camp',
   OTHER = 'other',
+  EVENT_HALL = 'event_hall',
 }

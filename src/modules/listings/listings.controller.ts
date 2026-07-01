@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -22,7 +23,9 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { getPropertyTypeGroup } from '../../common/utils/property-type.util';
 import { User } from '../users/entities/user.entity';
+import { BookingsService } from '../bookings/bookings.service';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { QueryListingsDto } from './dto/query-listings.dto';
 import { UpdateListingDto } from './dto/update-listing.dto';
@@ -37,6 +40,7 @@ import { ListingCategory } from './entities/listing-category.entity';
 export class ListingsController {
   constructor(
     private readonly listingsService: ListingsService,
+    private readonly bookingsService: BookingsService,
     @InjectRepository(ListingCategory)
     private readonly categoriesRepo: Repository<ListingCategory>,
   ) {}
@@ -95,6 +99,15 @@ export class ListingsController {
     return this.listingsService.getGoldenListings();
   }
 
+  // ─── PROPERTY TYPE GROUP ──────────────────────────────────────────────────────
+
+  @Public()
+  @Get('listings/property-type-group/:propertyType')
+  @ApiOperation({ summary: 'Get the UI field group for a property type' })
+  getFieldGroupForPropertyType(@Param('propertyType') propertyType: string) {
+    return { group: getPropertyTypeGroup(propertyType) };
+  }
+
   // ─── GET ONE ────────────────────────────────────────────────────────────────
 
   @Public()
@@ -111,6 +124,19 @@ export class ListingsController {
   @ApiOperation({ summary: 'Get similar listings' })
   getSimilar(@Param('id', ParseUUIDPipe) id: string) {
     return this.listingsService.getSimilarListings(id);
+  }
+
+  // ─── CALENDAR ───────────────────────────────────────────────────────────────
+
+  @Public()
+  @Get('listings/:id/calendar')
+  @ApiOperation({ summary: 'Get blocked dates for a listing in a given month' })
+  getCalendar(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('year', ParseIntPipe) year: number,
+    @Query('month', ParseIntPipe) month: number,
+  ) {
+    return this.bookingsService.getListingCalendar(id, year, month);
   }
 
   // ─── UPDATE ─────────────────────────────────────────────────────────────────

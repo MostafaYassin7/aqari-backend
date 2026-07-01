@@ -4,11 +4,13 @@ import {
   IsBoolean,
   IsEnum,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Min,
 } from 'class-validator';
 import { Facade } from '../../../common/enums/facade.enum';
@@ -160,4 +162,44 @@ export class CreateListingDto {
   @IsUUID()
   @IsOptional()
   licenseId?: string;
+
+  // Bookable listing fields — رحلات قصيرة أو قاعات مناسبات
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxGuests?: number;
+
+  @ApiPropertyOptional({ example: '14:00' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'checkInTime must be HH:mm format e.g. 14:00' })
+  checkInTime?: string;
+
+  @ApiPropertyOptional({ example: '12:00' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'checkOutTime must be HH:mm format e.g. 12:00' })
+  checkOutTime?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  minNights?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pricePerHalfDay?: number;
+
+  @ApiPropertyOptional({
+    enum: ['catering', 'sound_system', 'projector', 'decoration', 'security', 'parking'],
+    isArray: true,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsIn(['catering', 'sound_system', 'projector', 'decoration', 'security', 'parking'], { each: true })
+  includedServices?: string[];
 }
