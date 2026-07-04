@@ -9,6 +9,7 @@ import {
   NotificationType,
 } from '../notifications/entities/notification.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BookingHold, BookingHoldStatus } from './entities/booking-hold.entity';
 import { InvoiceReferenceType } from './entities/invoice.entity';
 import { Invoice } from './entities/invoice.entity';
 import {
@@ -27,6 +28,8 @@ export class WalletService {
     private readonly transactionsRepo: Repository<Transaction>,
     @InjectRepository(Invoice)
     private readonly invoicesRepo: Repository<Invoice>,
+    @InjectRepository(BookingHold)
+    private readonly bookingHoldsRepo: Repository<BookingHold>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
@@ -43,8 +46,25 @@ export class WalletService {
     return wallet;
   }
 
-  async getBalance(userId: string): Promise<Wallet> {
-    return this.getOrCreateWallet(userId);
+  async getBalance(userId: string): Promise<Wallet & { heldBalance: string; pendingEarnings: string }> {
+    const wallet = await this.getOrCreateWallet(userId);
+    const [heldBalance, pendingEarnings] = await Promise.all([
+      this.sumActiveHolds('guestWalletId', wallet.id),
+      this.sumActiveHolds('hostWalletId', wallet.id),
+    ]);
+
+    return Object.assign(wallet, { heldBalance, pendingEarnings });
+  }
+
+  private async sumActiveHolds(walletColumn: 'guestWalletId' | 'hostWalletId', walletId: string): Promise<string> {
+    const result = await this.bookingHoldsRepo
+      .createQueryBuilder('hold')
+      .select('COALESCE(SUM(hold.amount), 0)', 'sum')
+      .where(`hold.${walletColumn} = :walletId`, { walletId })
+      .andWhere('hold.status = :status', { status: BookingHoldStatus.HELD })
+      .getRawOne<{ sum: string }>();
+
+    return Number(result?.sum ?? 0).toFixed(2);
   }
 
   // ─── TOP UP ──────────────────────────────────────────────────────────────────
