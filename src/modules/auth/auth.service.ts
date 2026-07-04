@@ -11,6 +11,13 @@ import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { OtpCode } from './entities/otp-code.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
 
+const TEST_PHONE_OTPS: Record<string, string> = {
+  '+201008810487': '123456',
+  '+966500000000': '123456',
+};
+
+const TEST_ADMIN_PHONES = new Set(['+966500000000']);
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -28,8 +35,8 @@ export class AuthService {
   async sendOtp(phone: string): Promise<Record<string, unknown>> {
     await this.otpRepo.delete({ phone, isUsed: false });
 
-    const rawCode = phone === '+201008810487'
-      ? '123456'
+    const rawCode = TEST_PHONE_OTPS[phone]
+      ? TEST_PHONE_OTPS[phone]
       : Math.floor(100000 + Math.random() * 900000).toString();
 
     const hashed = await bcrypt.hash(rawCode, 10);
@@ -75,9 +82,11 @@ export class AuthService {
     const isNewUser = !user;
 
     if (!user) {
-      user = await this.usersRepo.save(
-        this.usersRepo.create({ phone, role: UserRole.GUEST }),
-      );
+      const role = TEST_ADMIN_PHONES.has(phone) ? UserRole.ADMIN : UserRole.GUEST;
+      user = await this.usersRepo.save(this.usersRepo.create({ phone, role }));
+    } else if (TEST_ADMIN_PHONES.has(phone) && user.role !== UserRole.ADMIN) {
+      user.role = UserRole.ADMIN;
+      user = await this.usersRepo.save(user);
     }
 
     const token = this.generateToken(user);

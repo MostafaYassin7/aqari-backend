@@ -13,7 +13,12 @@
       "Bash(dir)",
       "Bash(cd /d D:\\\\Aqar\\\\aqar-backend)",
       "Bash(powershell -Command \"ls\")",
-      "WebFetch(domain:docs.myfatoorah.com)"
+      "WebFetch(domain:docs.myfatoorah.com)",
+      "Bash(python3 *)",
+      "Bash(curl -s \"https://api.aqora.sa/api/v1/listing-categories\")",
+      "Bash(curl -s -X POST __TRACKED_VAR__/bookings/check-availability/__TRACKED_VAR__ -H 'Content-Type: application/json' -d '{\"checkInDate\":\"2026-08-01\",\"checkOutDate\":\"2026-08-04\"}')",
+      "Bash(curl -s 'https://api.aqora.sa/api/v1/listings?listingType=sale&limit=1')",
+      "Bash(curl -s -o /tmp/swagger2.json -w \"%{http_code}\\\\n\" \"https://api.aqora.sa/api/docs-json\")"
     ]
   }
 }
