@@ -432,7 +432,7 @@ export class BookingsService {
     await manager.save(ListingAvailability, manager.create(ListingAvailability, records));
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_MINUTE)
   async handleBookingHoldReleases(): Promise<void> {
     await this.releaseDueBookingHolds();
   }
