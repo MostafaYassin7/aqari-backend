@@ -17,6 +17,7 @@ import { User } from '../users/entities/user.entity';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { QueryListingsDto } from './dto/query-listings.dto';
 import { UpdateListingDto } from './dto/update-listing.dto';
+import { ListingCategory } from './entities/listing-category.entity';
 import { ListingMedia } from './entities/listing-media.entity';
 import { Listing } from './entities/listing.entity';
 import { ListingsAlgoliaService } from './listings-algolia.service';
@@ -36,6 +37,8 @@ export class ListingsService {
     private readonly likesRepo: Repository<Like>,
     @InjectRepository(PropertyAdvertisementLicense)
     private readonly licensesRepo: Repository<PropertyAdvertisementLicense>,
+    @InjectRepository(ListingCategory)
+    private readonly categoriesRepo: Repository<ListingCategory>,
     private readonly algolia: ListingsAlgoliaService,
     private readonly searchService: SearchService,
     private readonly mediaService: MediaService,
@@ -67,6 +70,25 @@ export class ListingsService {
     // column (string | null) but a number on the DTO — same treatment as
     // totalPrice/pricePerMeter/commissionPercent/streetWidth below.
     const { licenseId, advertiserType, pricePerHalfDay, ...listingFields } = dto;
+
+    // ── categoryId must match the submitted propertyType/listingType ─────────
+    // categoryId drives search/filtering (e.g. "شاليه إيجار يومي"), so a
+    // mismatched category would show the listing under the wrong tab even
+    // though propertyType/listingType are validated independently by the DTO.
+    const category = await this.categoriesRepo.findOne({
+      where: { id: dto.categoryId },
+    });
+    if (!category) {
+      throw new BadRequestException('التصنيف غير موجود');
+    }
+    if (
+      category.propertyType !== dto.propertyType ||
+      category.listingType !== dto.listingType
+    ) {
+      throw new BadRequestException(
+        'التصنيف المحدد لا يتوافق مع نوع العقار أو نوع الإعلان',
+      );
+    }
 
     // ── Pre-check license before creating listing ────────────────────────────
     // listingId = null ensures this license has not already been used

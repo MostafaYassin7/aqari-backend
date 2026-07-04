@@ -54,17 +54,25 @@ const CATEGORIES: Partial<ListingCategory>[] = [
   { name: 'Chalet Daily Rent',     nameAr: 'شاليه إيجار يومي',    propertyType: PropertyType.CHALET,            listingType: ListingType.RENT_SHORT, sortOrder: 13 },
   { name: 'Rest House for Rent',   nameAr: 'استراحة للإيجار',     propertyType: PropertyType.REST_HOUSE,        listingType: ListingType.RENT_LONG,  sortOrder: 14 },
   { name: 'Rest House Daily Rent', nameAr: 'استراحة إيجار يومي',  propertyType: PropertyType.REST_HOUSE,        listingType: ListingType.RENT_SHORT, sortOrder: 15 },
+  { name: 'Event Hall',            nameAr: 'قاعة مناسبات واحتفالات', propertyType: PropertyType.EVENT_HALL,     listingType: ListingType.RENT_SHORT, sortOrder: 16 },
 ];
 
+// Inserts any categories from CATEGORIES that don't already exist by name,
+// so re-running after adding a new entry (e.g. Event Hall) still seeds just
+// the new one instead of skipping wholesale because the table is non-empty.
 async function seedCategories(ds: DataSource): Promise<Map<string, string>> {
   const repo = ds.getRepository(ListingCategory);
-  const count = await repo.count();
-  if (count === 0) {
-    await repo.save(repo.create(CATEGORIES));
-    console.log(`✅ Seeded ${CATEGORIES.length} listing categories.`);
+  const existing = await repo.find();
+  const existingNames = new Set(existing.map((c) => c.name));
+  const missing = CATEGORIES.filter((c) => !existingNames.has(c.name!));
+
+  if (missing.length > 0) {
+    await repo.save(repo.create(missing));
+    console.log(`✅ Seeded ${missing.length} new listing categories.`);
   } else {
-    console.log(`⚠️  Categories already seeded (${count}). Skipping.`);
+    console.log(`⚠️  All categories already seeded (${existing.length}). Skipping.`);
   }
+
   const all = await repo.find();
   const map = new Map<string, string>();
   all.forEach((c) => map.set(c.name, c.id));

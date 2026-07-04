@@ -60,21 +60,29 @@ const CATEGORIES: Partial<ListingCategory>[] = [
   // Camps
   { name: 'Camp for Sale',             nameAr: 'مخيم للبيع',            propertyType: PropertyType.CAMP,             listingType: ListingType.SALE,       sortOrder: 28 },
   { name: 'Camp for Rent',             nameAr: 'مخيم للإيجار',          propertyType: PropertyType.CAMP,             listingType: ListingType.RENT_LONG,  sortOrder: 29 },
+  // Event Halls
+  { name: 'Event Hall',                nameAr: 'قاعة مناسبات واحتفالات', propertyType: PropertyType.EVENT_HALL,      listingType: ListingType.RENT_SHORT, sortOrder: 30 },
 ];
 
+// Inserts any categories from CATEGORIES that don't already exist by name,
+// so re-running after adding a new entry still seeds just the new one
+// instead of skipping wholesale because the table is non-empty.
 async function seed() {
   await dataSource.initialize();
   const repo = dataSource.getRepository(ListingCategory);
 
-  const count = await repo.count();
-  if (count > 0) {
-    console.log(`⚠️  Categories already seeded (${count} records). Skipping.`);
+  const existing = await repo.find();
+  const existingNames = new Set(existing.map((c) => c.name));
+  const missing = CATEGORIES.filter((c) => !existingNames.has(c.name!));
+
+  if (missing.length === 0) {
+    console.log(`⚠️  All categories already seeded (${existing.length} records). Skipping.`);
     await dataSource.destroy();
     return;
   }
 
-  await repo.save(repo.create(CATEGORIES));
-  console.log(`✅ Seeded ${CATEGORIES.length} listing categories.`);
+  await repo.save(repo.create(missing));
+  console.log(`✅ Seeded ${missing.length} new listing categories.`);
   await dataSource.destroy();
 }
 

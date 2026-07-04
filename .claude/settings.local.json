@@ -18,7 +18,9 @@
       "Bash(curl -s \"https://api.aqora.sa/api/v1/listing-categories\")",
       "Bash(curl -s -X POST __TRACKED_VAR__/bookings/check-availability/__TRACKED_VAR__ -H 'Content-Type: application/json' -d '{\"checkInDate\":\"2026-08-01\",\"checkOutDate\":\"2026-08-04\"}')",
       "Bash(curl -s 'https://api.aqora.sa/api/v1/listings?listingType=sale&limit=1')",
-      "Bash(curl -s -o /tmp/swagger2.json -w \"%{http_code}\\\\n\" \"https://api.aqora.sa/api/docs-json\")"
+      "Bash(curl -s -o /tmp/swagger2.json -w \"%{http_code}\\\\n\" \"https://api.aqora.sa/api/docs-json\")",
+      "Bash(curl -s -X PATCH __TRACKED_VAR__/bookings/__TRACKED_VAR__/confirm -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(curl -s -X POST __TRACKED_VAR__/bookings/check-availability/__TRACKED_VAR__ -H 'Content-Type: application/json' -d '{\"checkInDate\":\"2026-08-04\",\"checkOutDate\":\"2026-08-06\"}')"
     ]
   }
 }
