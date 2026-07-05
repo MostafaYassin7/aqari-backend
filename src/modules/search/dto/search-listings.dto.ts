@@ -21,6 +21,11 @@ export class SearchListingsDto {
   @IsOptional()
   propertyType?: PropertyType;
 
+  @ApiPropertyOptional({ enum: PropertyType })
+  @IsEnum(PropertyType)
+  @IsOptional()
+  excludePropertyType?: PropertyType;
+
   @ApiPropertyOptional({ enum: ListingType })
   @IsEnum(ListingType)
   @IsOptional()
@@ -31,9 +36,17 @@ export class SearchListingsDto {
   @ApiPropertyOptional() @Type(() => Number) @IsNumber() @IsOptional() areaFrom?: number;
   @ApiPropertyOptional() @Type(() => Number) @IsNumber() @IsOptional() areaTo?: number;
   @ApiPropertyOptional() @Type(() => Number) @IsNumber() @IsOptional() bedrooms?: number;
+  @ApiPropertyOptional() @Type(() => Number) @IsNumber() @IsOptional() maxGuests?: number;
 
   @ApiPropertyOptional() @Transform(({ value }) => value === 'true' || value === true) @IsBoolean() @IsOptional() isFurnished?: boolean;
   @ApiPropertyOptional() @Transform(({ value }) => value === 'true' || value === true) @IsBoolean() @IsOptional() hasElevator?: boolean;
+  @ApiPropertyOptional() @Transform(({ value }) => value === 'true' || value === true) @IsBoolean() @IsOptional() hasWater?: boolean;
+  @ApiPropertyOptional() @Transform(({ value }) => value === 'true' || value === true) @IsBoolean() @IsOptional() hasElectricity?: boolean;
+
+  @ApiPropertyOptional({ enum: ['newest', 'oldest', 'price_asc', 'price_desc'] })
+  @IsString()
+  @IsOptional()
+  sortBy?: 'newest' | 'oldest' | 'price_asc' | 'price_desc';
 
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)

@@ -53,10 +53,14 @@ export class SearchService {
     if (dto.city)         parts.push(`city:"${dto.city}"`);
     if (dto.district)     parts.push(`district:"${dto.district}"`);
     if (dto.propertyType) parts.push(`propertyType:${dto.propertyType}`);
+    if (dto.excludePropertyType) parts.push(`NOT propertyType:${dto.excludePropertyType}`);
     if (dto.listingType)  parts.push(`listingType:${dto.listingType}`);
     if (dto.bedrooms != null) parts.push(`bedrooms >= ${dto.bedrooms}`);
+    if (dto.maxGuests != null) parts.push(`maxGuests >= ${dto.maxGuests}`);
     if (dto.isFurnished)  parts.push(`isFurnished:true`);
     if (dto.hasElevator)  parts.push(`hasElevator:true`);
+    if (dto.hasWater)     parts.push(`hasWater:true`);
+    if (dto.hasElectricity) parts.push(`hasElectricity:true`);
 
     if (dto.priceFrom != null && dto.priceTo != null) {
       parts.push(`totalPrice:${dto.priceFrom} TO ${dto.priceTo}`);
@@ -94,7 +98,7 @@ export class SearchService {
     });
 
     return {
-      hits: result.hits,
+      hits: this.sortHits(result.hits, dto.sortBy),
       total: result.nbHits,
       page,
       pages: result.nbPages,
@@ -120,11 +124,33 @@ export class SearchService {
     });
 
     return {
-      hits: result.hits,
+      hits: this.sortHits(result.hits, dto.sortBy),
       total: result.nbHits,
       page,
       pages: result.nbPages,
     };
+  }
+
+  private sortHits<T extends Record<string, unknown>>(hits: T[], sortBy?: SearchListingsDto['sortBy']): T[] {
+    if (!sortBy || sortBy === 'newest') return hits;
+
+    const sorted = [...hits];
+    const numberValue = (hit: T, key: string): number => Number(hit[key] ?? 0);
+    const dateValue = (hit: T): number => {
+      const value = hit['createdAt'] ?? hit['created_at'] ?? hit['updatedAt'];
+      const time = typeof value === 'string' || value instanceof Date ? new Date(value).getTime() : 0;
+      return Number.isFinite(time) ? time : 0;
+    };
+
+    if (sortBy === 'oldest') {
+      sorted.sort((a, b) => dateValue(a) - dateValue(b));
+    } else if (sortBy === 'price_asc') {
+      sorted.sort((a, b) => numberValue(a, 'totalPrice') - numberValue(b, 'totalPrice'));
+    } else if (sortBy === 'price_desc') {
+      sorted.sort((a, b) => numberValue(b, 'totalPrice') - numberValue(a, 'totalPrice'));
+    }
+
+    return sorted;
   }
 
   // ─── BY REFERENCE (PostgreSQL) ───────────────────────────────────────────────
@@ -187,14 +213,18 @@ export class SearchService {
     if (has('city') && listing.city !== filters['city']) return false;
     if (has('district') && listing.district !== filters['district']) return false;
     if (has('propertyType') && listing.propertyType !== filters['propertyType']) return false;
+    if (has('excludePropertyType') && listing.propertyType === filters['excludePropertyType']) return false;
     if (has('listingType') && listing.listingType !== filters['listingType']) return false;
     if (has('bedrooms') && Number(listing.bedrooms) < Number(filters['bedrooms'])) return false;
+    if (has('maxGuests') && Number(listing.maxGuests) < Number(filters['maxGuests'])) return false;
     if (has('priceFrom') && Number(listing.totalPrice) < Number(filters['priceFrom'])) return false;
     if (has('priceTo') && Number(listing.totalPrice) > Number(filters['priceTo'])) return false;
     if (has('areaFrom') && Number(listing.area) < Number(filters['areaFrom'])) return false;
     if (has('areaTo') && Number(listing.area) > Number(filters['areaTo'])) return false;
     if (has('isFurnished') && filters['isFurnished'] === true && !listing.isFurnished) return false;
     if (has('hasElevator') && filters['hasElevator'] === true && !listing.hasElevator) return false;
+    if (has('hasWater') && filters['hasWater'] === true && !listing.hasWater) return false;
+    if (has('hasElectricity') && filters['hasElectricity'] === true && !listing.hasElectricity) return false;
     return true;
   }
 
