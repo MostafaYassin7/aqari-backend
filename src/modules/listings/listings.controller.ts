@@ -175,6 +175,6 @@ export class ListingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a listing' })
   remove(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
-    return this.listingsService.remove(id, user.id);
+    return this.listingsService.remove(id, user.id, user.role === UserRole.ADMIN);
   }
 }

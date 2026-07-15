@@ -320,10 +320,10 @@ export class ListingsService {
 
   // ─── REMOVE ─────────────────────────────────────────────────────────────────
 
-  async remove(id: string, userId: string): Promise<void> {
+  async remove(id: string, userId: string, isAdmin = false): Promise<void> {
     const listing = await this.listingsRepo.findOne({ where: { id } });
     if (!listing) throw new NotFoundException('Listing not found');
-    if (listing.ownerId !== userId)
+    if (!isAdmin && listing.ownerId !== userId)
       throw new ForbiddenException('Not the listing owner');
 
     // Delete media files from GCP before soft-deleting
