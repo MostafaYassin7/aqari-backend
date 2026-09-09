@@ -1,9 +1,17 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, Min } from 'class-validator';
-import { TransactionReferenceType } from '../entities/transaction.entity';
+import {
+  TransactionReferenceType,
+  TransactionType,
+} from '../entities/transaction.entity';
 
 export class QueryTransactionsDto {
+  @ApiPropertyOptional({ enum: TransactionType })
+  @IsOptional()
+  @IsEnum(TransactionType)
+  type?: TransactionType;
+
   @ApiPropertyOptional({ enum: TransactionReferenceType })
   @IsOptional()
   @IsEnum(TransactionReferenceType)

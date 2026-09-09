@@ -204,6 +204,7 @@ export class WalletService {
   async getTransactions(
     userId: string,
     referenceType?: TransactionReferenceType,
+    type?: TransactionType,
     page = 1,
     limit = 20,
   ): Promise<{ data: Transaction[]; total: number; page: number }> {
@@ -218,6 +219,9 @@ export class WalletService {
 
     if (referenceType) {
       qb.andWhere('t.referenceType = :referenceType', { referenceType });
+    }
+    if (type) {
+      qb.andWhere('t.type = :type', { type });
     }
 
     const [data, total] = await qb.getManyAndCount();

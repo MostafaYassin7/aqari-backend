@@ -57,7 +57,7 @@ export class Booking extends BaseEntity {
   guestCount!: number | null;
 
   // السعر الإجمالي — calculated and stored
-  // Payment arranged via chat, not collected here
+  // Held from the guest wallet after the host confirms the booking.
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   totalPrice!: string;
 

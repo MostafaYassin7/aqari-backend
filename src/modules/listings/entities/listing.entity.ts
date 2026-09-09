@@ -128,7 +128,7 @@ export class Listing extends BaseEntity {
   hasSpecialEntrance!: boolean;
 
   // ─── BOOKABLE LISTING FIELDS ──────────────────────────────────────────────────
-  // Used when listingType = 'rent_short' OR propertyType = 'event_hall'
+  // Daily rentals use these fields; event halls retain capacity but are contact-only.
 
   // الطاقة الاستيعابية القصوى
   // Required for event halls, optional for daily rentals

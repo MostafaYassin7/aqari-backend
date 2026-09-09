@@ -35,6 +35,7 @@ export class WalletController {
     return this.walletService.getTransactions(
       user.id,
       query.referenceType,
+      query.type,
       query.page,
       query.limit,
     );

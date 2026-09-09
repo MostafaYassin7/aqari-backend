@@ -19,6 +19,7 @@ const AppDataSource = new DataSource({
   entities: ['src/modules/**/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'typeorm_migrations',
+  migrationsTransactionMode: 'each',
 });
 
 export default AppDataSource;

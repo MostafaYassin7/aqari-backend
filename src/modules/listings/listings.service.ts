@@ -7,7 +7,9 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { ListingStatus } from '../../common/enums/listing-status.enum';
+import { ListingType } from '../../common/enums/listing-type.enum';
 import { MediaType } from '../../common/enums/media-type.enum';
+import { PropertyType } from '../../common/enums/property-type.enum';
 import { Favorite, FavoriteTargetType } from '../engagement/entities/favorite.entity';
 import { Like } from '../engagement/entities/like.entity';
 import { MediaService } from '../media/media.service';
@@ -69,7 +71,49 @@ export class ListingsService {
     // pricePerHalfDay is destructured out separately since it's a decimal
     // column (string | null) but a number on the DTO — same treatment as
     // totalPrice/pricePerMeter/commissionPercent/streetWidth below.
-    const { licenseId, advertiserType, pricePerHalfDay, ...listingFields } = dto;
+    const {
+      licenseId,
+      advertiserType,
+      maxGuests,
+      checkInTime,
+      checkOutTime,
+      minNights,
+      pricePerHalfDay,
+      includedServices,
+      ...listingFields
+    } = dto;
+
+    const isEventHall = dto.propertyType === PropertyType.EVENT_HALL;
+    const isDailyRental =
+      dto.listingType === ListingType.RENT_SHORT && !isEventHall;
+    const categoryFields = isEventHall
+      ? {
+          maxGuests: maxGuests ?? null,
+          checkInTime: null,
+          checkOutTime: null,
+          minNights: null,
+          pricePerHalfDay: pricePerHalfDay?.toString() ?? null,
+          includedServices: includedServices?.length
+            ? includedServices
+            : null,
+        }
+      : isDailyRental
+        ? {
+            maxGuests: maxGuests ?? null,
+            checkInTime: checkInTime ?? null,
+            checkOutTime: checkOutTime ?? null,
+            minNights: minNights ?? 1,
+            pricePerHalfDay: null,
+            includedServices: null,
+          }
+        : {
+            maxGuests: null,
+            checkInTime: null,
+            checkOutTime: null,
+            minNights: null,
+            pricePerHalfDay: null,
+            includedServices: null,
+          };
 
     // ── categoryId must match the submitted propertyType/listingType ─────────
     // categoryId drives search/filtering (e.g. "شاليه إيجار يومي"), so a
@@ -135,7 +179,7 @@ export class ListingsService {
       pricePerMeter: pricePerMeter?.toFixed(2) ?? null,
       commissionPercent: dto.commissionPercent?.toString() ?? null,
       streetWidth: dto.streetWidth?.toString() ?? null,
-      pricePerHalfDay: pricePerHalfDay?.toString() ?? null,
+      ...categoryFields,
       status,
       licenseId: licenseId ?? null,
     });

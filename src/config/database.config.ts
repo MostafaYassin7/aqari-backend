@@ -14,6 +14,7 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
     synchronize: false,
     migrations: [__dirname + '/../migrations/*.{ts,js}'],
     migrationsRun: true,
+    migrationsTransactionMode: 'each',
     logging: config.get<string>('NODE_ENV') === 'development',
   }),
 };

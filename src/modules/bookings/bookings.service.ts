@@ -21,6 +21,8 @@ import { Booking } from './entities/booking.entity';
 @Injectable()
 export class BookingsService {
   private readonly logger = new Logger(BookingsService.name);
+  private readonly contactOnlyMessage =
+    'قاعات المناسبات متاحة للتواصل فقط ولا تدعم الحجز الإلكتروني';
 
   constructor(
     @InjectRepository(Booking)
@@ -52,32 +54,23 @@ export class BookingsService {
     return dates;
   }
 
-  /**
-   * Daily rental: checks blocked dates from checkInDate to checkOutDate (checkout NOT checked).
-   * Event hall: checks if specific date+slot is blocked, also checks if full_day blocks the slot.
-   */
+  private assertDailyRental(listing: Listing): void {
+    if (listing.propertyType === PropertyType.EVENT_HALL) {
+      throw new BadRequestException(this.contactOnlyMessage);
+    }
+    if (listing.listingType !== ListingType.RENT_SHORT) {
+      throw new BadRequestException('هذا الإعلان لا يدعم الحجز');
+    }
+  }
+
+  /** Daily rental date availability. Checkout is not checked or blocked. */
   async checkAvailability(
     listingId: string,
     dto: CheckAvailabilityDto,
   ): Promise<{ isAvailable: boolean; blockedDates?: string[] }> {
     const listing = await this.listingsRepo.findOne({ where: { id: listingId } });
     if (!listing) throw new NotFoundException('الإعلان غير موجود');
-
-    if (listing.propertyType === PropertyType.EVENT_HALL) {
-      if (!dto.eventDate || !dto.timeSlot) {
-        throw new BadRequestException('تاريخ الحدث والفترة الزمنية مطلوبان');
-      }
-
-      const slotBlocked = await this.availabilityRepo.findOne({
-        where: { listingId, date: dto.eventDate, timeSlot: dto.timeSlot },
-      });
-      const fullDayBlocked = await this.availabilityRepo.findOne({
-        where: { listingId, date: dto.eventDate, timeSlot: 'full_day' },
-      });
-
-      if (slotBlocked || fullDayBlocked) return { isAvailable: false };
-      return { isAvailable: true };
-    }
+    this.assertDailyRental(listing);
 
     // Daily rental
     if (!dto.checkInDate || !dto.checkOutDate) {
@@ -106,14 +99,14 @@ export class BookingsService {
   /**
    * Validates:
    *   1. Listing exists and is published
-   *   2. Listing is bookable (event_hall OR rent_short)
+   *   2. Listing is a daily rental (event halls are contact-only)
    *   3. Owner cannot book own listing
    *   4. Required fields per listing type
    *   5. Dates are available
    *   6. Guest count within maxGuests
    *
    * Calculates total price automatically.
-   * Does NOT deduct wallet — payment via chat.
+   * Does NOT deduct wallet — the wallet hold is created on owner confirmation.
    * Notifies owner of new request.
    */
   async createBooking(guestId: string, dto: CreateBookingDto): Promise<Booking> {
@@ -124,27 +117,19 @@ export class BookingsService {
     if (!listing) throw new NotFoundException('الإعلان غير موجود أو غير متاح');
 
     // 2. Verify listing is bookable
-    const isBookable = listing.propertyType === PropertyType.EVENT_HALL || listing.listingType === ListingType.RENT_SHORT;
-    if (!isBookable) throw new BadRequestException('هذا الإعلان لا يدعم الحجز');
+    this.assertDailyRental(listing);
 
     // 3. Prevent self-booking
     if (listing.ownerId === guestId) throw new BadRequestException('لا يمكنك حجز إعلانك الخاص');
 
     // 4. Validate required fields per type
-    if (listing.propertyType === PropertyType.EVENT_HALL) {
-      if (!dto.eventDate) throw new BadRequestException('تاريخ الحدث مطلوب');
-      if (!dto.timeSlot) throw new BadRequestException('الفترة الزمنية مطلوبة (صباحي/مسائي/يوم كامل)');
-    } else {
-      if (!dto.checkInDate) throw new BadRequestException('تاريخ الوصول مطلوب');
-      if (!dto.checkOutDate) throw new BadRequestException('تاريخ المغادرة مطلوب');
-    }
+    if (!dto.checkInDate) throw new BadRequestException('تاريخ الوصول مطلوب');
+    if (!dto.checkOutDate) throw new BadRequestException('تاريخ المغادرة مطلوب');
 
     // 5. Check availability
     const availability = await this.checkAvailability(dto.listingId, {
       checkInDate: dto.checkInDate,
       checkOutDate: dto.checkOutDate,
-      eventDate: dto.eventDate,
-      timeSlot: dto.timeSlot,
     });
     if (!availability.isAvailable) throw new BadRequestException('التواريخ المطلوبة غير متاحة');
 
@@ -152,23 +137,14 @@ export class BookingsService {
     let totalPrice = 0;
     let nights: number | null = null;
 
-    if (listing.propertyType === PropertyType.EVENT_HALL) {
-      if (dto.timeSlot === 'full_day') {
-        totalPrice = parseFloat(listing.totalPrice);
-      } else {
-        if (!listing.pricePerHalfDay) throw new BadRequestException('سعر الفترة غير محدد، تواصل مع المالك');
-        totalPrice = parseFloat(listing.pricePerHalfDay);
-      }
-    } else {
-      const dates = this.getDatesBetween(dto.checkInDate!, dto.checkOutDate!);
-      nights = dates.length;
-      if (listing.minNights && nights < listing.minNights) {
-        throw new BadRequestException(
-          `الحد الأدنى للإقامة ${listing.minNights} ${listing.minNights === 1 ? 'ليلة' : 'ليالٍ'}`,
-        );
-      }
-      totalPrice = parseFloat(listing.totalPrice) * nights;
+    const dates = this.getDatesBetween(dto.checkInDate!, dto.checkOutDate!);
+    nights = dates.length;
+    if (listing.minNights && nights < listing.minNights) {
+      throw new BadRequestException(
+        `الحد الأدنى للإقامة ${listing.minNights} ${listing.minNights === 1 ? 'ليلة' : 'ليالٍ'}`,
+      );
     }
+    totalPrice = parseFloat(listing.totalPrice) * nights;
 
     // 7. Validate guest count
     if (dto.guestCount && listing.maxGuests && dto.guestCount > listing.maxGuests) {
@@ -183,8 +159,8 @@ export class BookingsService {
       checkInDate: dto.checkInDate ?? null,
       checkOutDate: dto.checkOutDate ?? null,
       nights,
-      eventDate: dto.eventDate ?? null,
-      timeSlot: dto.timeSlot ?? null,
+      eventDate: null,
+      timeSlot: null,
       guestCount: dto.guestCount ?? null,
       totalPrice: totalPrice.toFixed(2),
       status: 'pending',
@@ -200,7 +176,11 @@ export class BookingsService {
       `لديك طلب حجز جديد على "${listing.title}"`,
       NotificationReferenceType.LISTING,
       listing.id,
-    );
+    ).catch((error: unknown) => {
+      this.logger.warn(
+        `Failed to notify owner about booking ${booking.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
 
     return booking;
   }
@@ -220,6 +200,12 @@ export class BookingsService {
         });
         if (!lockedBooking) throw new NotFoundException('الحجز غير موجود أو لا يمكن تأكيده');
         if (lockedBooking.status !== 'pending') throw new BadRequestException('لا يمكن تأكيد هذا الحجز');
+
+        const listing = await manager.findOne(Listing, {
+          where: { id: lockedBooking.listingId },
+        });
+        if (!listing) throw new NotFoundException('الإعلان غير موجود');
+        this.assertDailyRental(listing);
 
         await this.ensureAvailableForConfirmation(manager, lockedBooking);
 
@@ -300,7 +286,11 @@ export class BookingsService {
       'تم تأكيد حجزك وتم حجز مبلغ الحجز من محفظتك. سيتم تحويل المبلغ للمضيف بعد 7 أيام من انتهاء الحجز.',
       NotificationReferenceType.BOOKING,
       booking.id,
-    );
+    ).catch((error: unknown) => {
+      this.logger.warn(
+        `Failed to notify guest about confirmed booking ${booking.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
 
     return booking;
   }
@@ -461,6 +451,12 @@ export class BookingsService {
 
       if (!hold || hold.status !== BookingHoldStatus.HELD) return null;
 
+      const booking = await manager.findOne(Booking, {
+        where: { id: hold.bookingId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!booking) return null;
+
       const hostWallet = await manager.findOne(Wallet, {
         where: { id: hold.hostWalletId },
         lock: { mode: 'pessimistic_write' },
@@ -504,6 +500,9 @@ export class BookingsService {
       hold.releasedAt = new Date();
       await manager.save(hold);
 
+      booking.status = 'completed';
+      await manager.save(booking);
+
       return { hostUserId: hostWallet.userId, bookingId: hold.bookingId, amount };
     });
 
@@ -530,6 +529,10 @@ export class BookingsService {
     year: number,
     month: number,
   ): Promise<{ blockedDates: { date: string; timeSlot: string | null }[] }> {
+    const listing = await this.listingsRepo.findOne({ where: { id: listingId } });
+    if (!listing) throw new NotFoundException('الإعلان غير موجود');
+    this.assertDailyRental(listing);
+
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const lastDay = new Date(year, month, 0).getDate();
     const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
