@@ -29,9 +29,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     try {
-      const token =
+      const rawToken =
         (client.handshake.auth as Record<string, string>)['token'] ??
-        (client.handshake.headers['authorization'] ?? '').replace('Bearer ', '');
+        client.handshake.headers['authorization'] ??
+        '';
+      const token = String(rawToken)
+        .replace(/^Bearer\s+/i, '')
+        .trim();
 
       const payload = this.jwtService.verify<{ sub: string }>(token);
       client.data = { userId: payload.sub };
@@ -50,8 +54,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('join_chat')
   async handleJoinChat(client: Socket, chatId: string) {
     const userId = (client.data as { userId: string }).userId;
-    await client.join(chatId);
     await this.chatService.markMessagesRead(chatId, userId);
+    await client.join(chatId);
     this.server.to(chatId).emit('messages_read', { chatId, userId });
   }
 

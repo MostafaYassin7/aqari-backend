@@ -44,9 +44,7 @@ export class ChatService {
         { a: participantA, b: participantB },
       )
       .andWhere(
-        listingCondition
-          ? 'c.listingId = :listingId'
-          : 'c.listingId IS NULL',
+        listingCondition ? 'c.listingId = :listingId' : 'c.listingId IS NULL',
         listingCondition ? { listingId: listingCondition } : {},
       )
       .getOne();
@@ -61,7 +59,9 @@ export class ChatService {
     const saved = await this.chatsRepo.save(chat);
 
     if (listingCondition) {
-      this.listingsService.incrementMessageCount(listingCondition).catch(() => null);
+      this.listingsService
+        .incrementMessageCount(listingCondition)
+        .catch(() => null);
     }
 
     return saved;
@@ -140,6 +140,12 @@ export class ChatService {
   // ─── MARK READ ───────────────────────────────────────────────────────────────
 
   async markMessagesRead(chatId: string, userId: string): Promise<void> {
+    const chat = await this.chatsRepo.findOne({ where: { id: chatId } });
+    if (!chat) throw new NotFoundException('Chat not found');
+    if (chat.participantA !== userId && chat.participantB !== userId) {
+      throw new ForbiddenException('Not a participant');
+    }
+
     await this.messagesRepo.update(
       { chatId, isRead: false, senderId: Not(userId) },
       { isRead: true, readAt: new Date() },
