@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -7,30 +7,28 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { parseTrustProxy } from './common/utils/trust-proxy';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useWebSocketAdapter(new IoAdapter(app));
 
   // Real client IP for Nafath X-Forwarded-For, throttling and the callback IP allow-list.
-  // TRUST_PROXY: hop count ("1"), "true", or a comma-separated list of proxy IPs/CIDRs.
-  const trustProxy = process.env['TRUST_PROXY'];
-  if (trustProxy) {
-    app.set(
-      'trust proxy',
-      /^\d+$/.test(trustProxy)
-        ? Number(trustProxy)
-        : trustProxy === 'true'
-          ? true
-          : trustProxy,
-    );
+  // TRUST_PROXY: number of proxies in front of the app ("1") or a comma-separated list of
+  // proxy IPs/CIDRs. "true" is rejected: it trusts the client-controlled X-Forwarded-For.
+  const trustProxy = parseTrustProxy(process.env['TRUST_PROXY']);
+  if (trustProxy !== undefined) {
+    app.set('trust proxy', trustProxy);
+    Logger.log(`trust proxy = ${trustProxy}`, 'Bootstrap');
   }
 
   // Security
-  app.use( helmet({
-    contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false,
-  }),);
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
   app.enableCors({ origin: '*' });
 
   // Global prefix
