@@ -395,6 +395,68 @@ describe('NafathService.getStatus', () => {
     expect(auth.generateToken).not.toHaveBeenCalled();
   });
 
+  it('does not redeem a COMPLETED result older than the redeem window', async () => {
+    const { service, requestsRepo, usersRepo, auth, linkTokens } =
+      makeService();
+    requestsRepo.findOne.mockResolvedValue(
+      makeRow({
+        status: NafathRequestStatus.COMPLETED,
+        completedAt: new Date(Date.now() - 6 * 60 * 1000),
+      }),
+    );
+
+    await expect(service.getStatus('id')).resolves.toEqual({
+      status: 'EXPIRED',
+    });
+    expect(requestsRepo.update).not.toHaveBeenCalled();
+    expect(usersRepo.findOne).not.toHaveBeenCalled();
+    expect(auth.generateToken).not.toHaveBeenCalled();
+    expect(linkTokens.sign).not.toHaveBeenCalled();
+  });
+
+  it('still redeems a COMPLETED result inside the redeem window', async () => {
+    const { service, requestsRepo, usersRepo } = makeService();
+    requestsRepo.findOne.mockResolvedValue(
+      makeRow({
+        status: NafathRequestStatus.COMPLETED,
+        completedAt: new Date(Date.now() - 60 * 1000),
+      }),
+    );
+    usersRepo.findOne.mockResolvedValue(linkedUser);
+
+    await expect(service.getStatus('id')).resolves.toMatchObject({
+      status: 'COMPLETED',
+      token: 'aqar-jwt',
+    });
+    expect(requestsRepo.update).toHaveBeenCalledWith(
+      { id: expect.any(String), consumedAt: IsNull() },
+      { consumedAt: expect.any(Date) },
+    );
+  });
+
+  it('serves a callback that completed while lazy-expiry was racing it', async () => {
+    const { service, requestsRepo, usersRepo } = makeService();
+    const row = makeRow({
+      expiresAt: new Date(Date.now() - 21_000),
+      createdAt: new Date(Date.now() - 81_000),
+    });
+    requestsRepo.findOne
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ ...row, status: NafathRequestStatus.COMPLETED });
+    requestsRepo.update
+      .mockResolvedValueOnce({ affected: 0 }) // finish(): callback won
+      .mockResolvedValue({ affected: 1 }); // redeem claim, etc.
+    usersRepo.findOne.mockResolvedValue(linkedUser);
+
+    await expect(service.getStatus(row.id)).resolves.toMatchObject({
+      status: 'COMPLETED',
+      token: 'aqar-jwt',
+    });
+    expect(requestsRepo.findOne).toHaveBeenLastCalledWith({
+      where: { id: row.id },
+    });
+  });
+
   it('passes REJECTED and FAILED through', async () => {
     const { service, requestsRepo } = makeService();
     requestsRepo.findOne.mockResolvedValueOnce(

@@ -1,12 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository } from 'typeorm';
+import { IsNull, LessThan, Repository } from 'typeorm';
 import {
   NafathRequest,
   NafathRequestStatus,
 } from './entities/nafath-request.entity';
 import { NAFATH_CONFIG, NafathConfig } from './nafath.config';
+import { REDEEM_WINDOW_MS } from './nafath.service';
 
 @Injectable()
 export class NafathCron {
@@ -27,6 +28,19 @@ export class NafathCron {
     );
     if (res.affected)
       this.logger.log(`Expired ${res.affected} stale Nafath request(s)`);
+
+    const unredeemed = await this.requestsRepo.update(
+      {
+        status: NafathRequestStatus.COMPLETED,
+        consumedAt: IsNull(),
+        completedAt: LessThan(new Date(Date.now() - REDEEM_WINDOW_MS)),
+      },
+      { status: NafathRequestStatus.EXPIRED },
+    );
+    if (unredeemed.affected)
+      this.logger.log(
+        `Expired ${unredeemed.affected} unredeemed Nafath result(s)`,
+      );
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)

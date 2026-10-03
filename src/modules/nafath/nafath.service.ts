@@ -43,6 +43,8 @@ const POLL_AFTER_MS = 10_000;
 const POLL_EVERY_MS = 5_000;
 const PER_ID_WINDOW_MS = 10 * 60 * 1000;
 const PER_ID_MAX_REQUESTS = 5;
+/** How long a COMPLETED, unconsumed result can still be exchanged for a session. */
+export const REDEEM_WINDOW_MS = 5 * 60 * 1000;
 
 export function parseTerminalStatus(
   value: unknown,
@@ -143,8 +145,20 @@ export class NafathService {
       row.status === NafathRequestStatus.WAITING &&
       Date.now() >= this.staleAt(row)
     ) {
-      await this.finish(row.id, NafathRequestStatus.EXPIRED, null, null);
-      row = { ...row, status: NafathRequestStatus.EXPIRED };
+      const expired = await this.finish(
+        row.id,
+        NafathRequestStatus.EXPIRED,
+        null,
+        null,
+      );
+      if (expired) {
+        row = { ...row, status: NafathRequestStatus.EXPIRED };
+      } else {
+        // A callback won the race; show what it recorded instead of assuming EXPIRED.
+        row =
+          (await this.requestsRepo.findOne({ where: { id: row.id } })) ??
+          ({ ...row, status: NafathRequestStatus.EXPIRED } as NafathRequest);
+      }
     }
 
     if (row.status === NafathRequestStatus.WAITING && this.shouldPoll(row)) {
@@ -155,6 +169,13 @@ export class NafathService {
       case NafathRequestStatus.WAITING:
         return { status: 'WAITING', expiresAt: row.expiresAt };
       case NafathRequestStatus.COMPLETED:
+        if (
+          !row.consumedAt &&
+          row.completedAt &&
+          Date.now() - row.completedAt.getTime() > REDEEM_WINDOW_MS
+        ) {
+          return { status: NafathRequestStatus.EXPIRED };
+        }
         return this.redeem(row);
       default:
         return { status: row.status };
