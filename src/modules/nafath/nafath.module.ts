@@ -8,6 +8,7 @@ import { NafathAuthController } from './nafath-auth.controller';
 import { NafathCallbackController } from './nafath-callback.controller';
 import { NafathClient } from './nafath.client';
 import { loadNafathConfig, NAFATH_CONFIG, NAFATH_JWT } from './nafath.config';
+import { NafathCron } from './nafath.cron';
 import { NafathIpGuard } from './nafath-ip.guard';
 import { NafathJwtVerifier } from './nafath-jwt.verifier';
 import { NafathLinkTokenService } from './nafath-link-token.service';
@@ -21,6 +22,7 @@ import { NafathService } from './nafath.service';
     // Bare instance: AuthModule's JwtService would force JWT_SECRET over our keys.
     { provide: NAFATH_JWT, useFactory: () => new JwtService() },
     NafathClient,
+    NafathCron,
     NafathJwtVerifier,
     NafathLinkTokenService,
     NafathService,
