@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { DataSource, IsNull, Not, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
@@ -239,19 +239,29 @@ export class NafathService {
         where: { nationalId: row.nationalId },
       });
       if (owner && owner.id !== userId) throw nafathError.idLinkedToOther();
-      if (!owner) {
-        const hasOtherId = await users.exists({
-          where: { id: userId, nationalId: Not(IsNull()) },
-        });
-        if (hasOtherId) throw nafathError.accountHasOtherId();
-      }
 
       try {
-        await users.update(userId, {
-          nationalId: row.nationalId,
-          nafathVerifiedAt: new Date(),
-          isVerified: true,
-        });
+        let res;
+        if (owner?.id === userId) {
+          // Idempotent re-link: user already owns this national ID
+          res = await users.update(userId, {
+            nationalId: row.nationalId,
+            nafathVerifiedAt: new Date(),
+            isVerified: true,
+          });
+        } else {
+          // New link: only update if user doesn't already have a different national ID
+          res = await users.update(
+            { id: userId, nationalId: IsNull() },
+            {
+              nationalId: row.nationalId,
+              nafathVerifiedAt: new Date(),
+              isVerified: true,
+            },
+          );
+        }
+        if ((res.affected ?? 0) === 0 && !owner)
+          throw nafathError.accountHasOtherId();
       } catch (err) {
         if (isUniqueViolation(err)) throw nafathError.idLinkedToOther();
         throw err;

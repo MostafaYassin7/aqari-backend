@@ -535,7 +535,6 @@ describe('NafathService.link', () => {
     };
     const txUsers = {
       findOne: jest.fn(),
-      exists: jest.fn().mockResolvedValue(false),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       findOneOrFail: jest
         .fn()
@@ -571,11 +570,14 @@ describe('NafathService.link', () => {
       where: { id: 'req-1' },
       lock: { mode: 'pessimistic_write' },
     });
-    expect(txUsers.update).toHaveBeenCalledWith('user-1', {
-      nationalId: NATIONAL_ID,
-      nafathVerifiedAt: expect.any(Date),
-      isVerified: true,
-    });
+    expect(txUsers.update).toHaveBeenCalledWith(
+      { id: 'user-1', nationalId: IsNull() },
+      {
+        nationalId: NATIONAL_ID,
+        nafathVerifiedAt: expect.any(Date),
+        isVerified: true,
+      },
+    );
     expect(txRequests.update).toHaveBeenCalledWith('req-1', {
       linkedUserId: 'user-1',
     });
@@ -640,11 +642,12 @@ describe('NafathService.link', () => {
     const { service, txRequests, txUsers } = setup();
     txRequests.findOne.mockResolvedValue(completedRow());
     txUsers.findOne.mockResolvedValue(null);
-    txUsers.exists.mockResolvedValue(true);
+    txUsers.update.mockResolvedValue({ affected: 0 });
 
     await expect(service.link('user-1', 'link-token')).rejects.toMatchObject({
       response: { error: 'NAFATH_ACCOUNT_HAS_OTHER_ID' },
     });
+    expect(txRequests.update).not.toHaveBeenCalled();
   });
 
   it('is idempotent when the current user already owns this national ID', async () => {
@@ -653,7 +656,13 @@ describe('NafathService.link', () => {
     txUsers.findOne.mockResolvedValue({ id: 'user-1' });
 
     await expect(service.link('user-1', 'link-token')).resolves.toBeDefined();
-    expect(txUsers.exists).not.toHaveBeenCalled();
+    expect(txUsers.update).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ nationalId: NATIONAL_ID }),
+    );
+    expect(txRequests.update).toHaveBeenCalledWith('req-1', {
+      linkedUserId: 'user-1',
+    });
   });
 
   it('maps a unique-constraint race to NAFATH_ID_LINKED_TO_OTHER_ACCOUNT', async () => {
@@ -667,5 +676,6 @@ describe('NafathService.link', () => {
     await expect(service.link('user-1', 'link-token')).rejects.toMatchObject({
       response: { error: 'NAFATH_ID_LINKED_TO_OTHER_ACCOUNT' },
     });
+    expect(txRequests.update).not.toHaveBeenCalled();
   });
 });
