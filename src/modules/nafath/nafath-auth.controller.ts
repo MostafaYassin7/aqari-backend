@@ -8,7 +8,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -23,6 +23,7 @@ import { User } from '../users/entities/user.entity';
 import { LinkNafathDto } from './dto/link-nafath.dto';
 import { StartNafathDto } from './dto/start-nafath.dto';
 import { normalizeIp } from './nafath-ip.util';
+import { NafathThrottlerGuard } from './nafath-throttler.guard';
 import { NafathService } from './nafath.service';
 
 @ApiTags('Auth — Nafath')
@@ -31,7 +32,7 @@ export class NafathAuthController {
   constructor(private readonly nafath: NafathService) {}
 
   @Public()
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(NafathThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('start')
   @ApiOperation({
