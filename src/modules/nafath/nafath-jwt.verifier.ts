@@ -50,7 +50,9 @@ export class NafathJwtVerifier {
     }
 
     if (payload.iss !== undefined && payload.iss !== EXPECTED_ISSUER) {
-      this.logger.warn(`Unexpected Nafath token issuer: ${String(payload.iss)}`);
+      this.logger.warn(
+        `Unexpected Nafath token issuer: ${String(payload.iss)}`,
+      );
     }
     return payload;
   }
@@ -58,7 +60,10 @@ export class NafathJwtVerifier {
   private decodeHeader(token: string): { alg?: string; kid?: string } {
     try {
       const [encoded] = token.split('.');
-      return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as { alg?: string; kid?: string };
+      return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as {
+        alg?: string;
+        kid?: string;
+      };
     } catch {
       throw new NafathTokenError('malformed token');
     }
@@ -87,10 +92,17 @@ export class NafathJwtVerifier {
         const next = new Map<string, string>();
         for (const jwk of jwks) {
           if (jwk.kty !== 'RSA' || !jwk.kid) continue;
-          const pem = createPublicKey({ key: jwk as unknown as JsonWebKey, format: 'jwk' })
-            .export({ type: 'spki', format: 'pem' })
-            .toString();
-          next.set(jwk.kid, pem);
+          try {
+            const pem = createPublicKey({
+              key: jwk as unknown as JsonWebKey,
+              format: 'jwk',
+            })
+              .export({ type: 'spki', format: 'pem' })
+              .toString();
+            next.set(jwk.kid, pem);
+          } catch {
+            this.logger.warn(`Skipping malformed Nafath JWK kid=${jwk.kid}`);
+          }
         }
         this.keys = next;
         this.fetchedAt = Date.now();

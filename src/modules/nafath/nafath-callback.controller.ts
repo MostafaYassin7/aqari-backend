@@ -31,7 +31,9 @@ export class NafathCallbackController {
   async callback(
     @Body() body: Record<string, unknown>,
   ): Promise<{ received: true }> {
-    const dto = plainToInstance(NafathCallbackDto, body);
+    // Express 5 leaves req.body undefined for non-JSON requests.
+    const input = typeof body === 'object' && body !== null ? body : {};
+    const dto = plainToInstance(NafathCallbackDto, input);
     const errors = await validate(dto, {
       whitelist: true,
       forbidNonWhitelisted: false,

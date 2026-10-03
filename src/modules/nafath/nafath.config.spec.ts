@@ -19,7 +19,10 @@ describe('loadNafathConfig', () => {
     expect(config.enabled).toBe(true);
     expect(config.baseUrl).toBe('https://rabet-nafath.api.elm.sa');
     expect(config.service).toBe('Login');
-    expect(config.callbackAllowedIps).toEqual(['195.170.180.7', '195.170.180.6']);
+    expect(config.callbackAllowedIps).toEqual([
+      '195.170.180.7',
+      '195.170.180.6',
+    ]);
     expect(config.locale).toBe('ar');
     expect(config.decisionSeconds).toBe(60);
     expect(config.graceSeconds).toBe(20);
@@ -48,6 +51,17 @@ describe('loadNafathConfig', () => {
       NAFATH_CALLBACK_ALLOWED_IPS: ' 1.1.1.1, ,2.2.2.2 ',
     });
     expect(config.callbackAllowedIps).toEqual(['1.1.1.1', '2.2.2.2']);
+  });
+
+  it('falls back to the default allow-list when the variable is empty', () => {
+    const config = loadNafathConfig({
+      ...base,
+      NAFATH_CALLBACK_ALLOWED_IPS: '',
+    });
+    expect(config.callbackAllowedIps).toEqual([
+      '195.170.180.7',
+      '195.170.180.6',
+    ]);
   });
 
   it('falls back to defaults for invalid numbers and locale', () => {

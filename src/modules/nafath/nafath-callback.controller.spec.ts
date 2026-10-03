@@ -16,6 +16,14 @@ describe('NafathCallbackController', () => {
     };
   }
 
+  it('answers 400 (not 500) when the body is not an object', async () => {
+    const { controller, service } = make();
+    await expect(controller.callback(undefined as never)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(service.handleCallback).not.toHaveBeenCalled();
+  });
+
   it('accepts bodies with extra fields Nafath may add', async () => {
     const { controller, service } = make();
     await expect(

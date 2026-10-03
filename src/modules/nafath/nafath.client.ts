@@ -13,22 +13,34 @@ export interface NafathJwk {
 
 const TIMEOUT_MS = 10_000;
 
+const malformed = () =>
+  new NafathApiError(200, null, null, 'Malformed Nafath response');
+
 @Injectable()
 export class NafathClient {
   constructor(@Inject(NAFATH_CONFIG) private readonly config: NafathConfig) {}
 
-  createRequest(p: {
+  async createRequest(p: {
     nationalId: string;
     service: string;
     locale: 'ar' | 'en';
     requestId: string;
     clientIp: string;
   }): Promise<{ transId: string; random: string }> {
-    const query = new URLSearchParams({ local: p.locale, requestId: p.requestId });
-    return this.call('POST', `/api/v1/mfa/request?${query.toString()}`, p.clientIp, {
-      nationalId: p.nationalId,
-      service: p.service,
+    const query = new URLSearchParams({
+      local: p.locale,
+      requestId: p.requestId,
     });
+    const res = await this.call<{ transId?: unknown; random?: unknown } | null>(
+      'POST',
+      `/api/v1/mfa/request?${query.toString()}`,
+      p.clientIp,
+      { nationalId: p.nationalId, service: p.service },
+    );
+    if (typeof res?.transId !== 'string' || typeof res.random !== 'string') {
+      throw malformed();
+    }
+    return { transId: res.transId, random: res.random };
   }
 
   async getStatus(p: {
@@ -37,17 +49,28 @@ export class NafathClient {
     random: string;
     clientIp: string;
   }): Promise<string> {
-    const res = await this.call<{ status: string }>('POST', '/api/v1/mfa/request/status', p.clientIp, {
-      nationalId: p.nationalId,
-      transId: p.transId,
-      random: p.random,
-    });
+    const res = await this.call<{ status?: unknown } | null>(
+      'POST',
+      '/api/v1/mfa/request/status',
+      p.clientIp,
+      {
+        nationalId: p.nationalId,
+        transId: p.transId,
+        random: p.random,
+      },
+    );
+    if (typeof res?.status !== 'string') throw malformed();
     return res.status;
   }
 
   async getJwks(): Promise<NafathJwk[]> {
-    const res = await this.call<{ keys?: NafathJwk[] }>('GET', '/api/v1/mfa/jwk', this.config.serverIp);
-    return res.keys ?? [];
+    const res = await this.call<{ keys?: unknown } | null>(
+      'GET',
+      '/api/v1/mfa/jwk',
+      this.config.serverIp,
+    );
+    if (!Array.isArray(res?.keys)) throw malformed();
+    return res.keys as NafathJwk[];
   }
 
   private async call<T>(
@@ -71,7 +94,12 @@ export class NafathClient {
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (err) {
-      throw new NafathApiError(0, null, null, `Nafath call failed: ${(err as Error).message}`);
+      throw new NafathApiError(
+        0,
+        null,
+        null,
+        `Nafath call failed: ${(err as Error).message}`,
+      );
     }
 
     const text = await res.text();
@@ -83,14 +111,21 @@ export class NafathClient {
     }
 
     if (!res.ok) {
-      const errBody = (json ?? {}) as { code?: unknown; reference?: unknown; message?: unknown };
+      const errBody = (json ?? {}) as {
+        code?: unknown;
+        reference?: unknown;
+        message?: unknown;
+      };
       throw new NafathApiError(
         res.status,
         typeof errBody.code === 'string' ? errBody.code : null,
-        typeof errBody.reference === 'string' || typeof errBody.reference === 'number'
+        typeof errBody.reference === 'string' ||
+          typeof errBody.reference === 'number'
           ? errBody.reference
           : null,
-        typeof errBody.message === 'string' ? errBody.message : `HTTP ${res.status}`,
+        typeof errBody.message === 'string'
+          ? errBody.message
+          : `HTTP ${res.status}`,
       );
     }
 

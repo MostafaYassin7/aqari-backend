@@ -56,7 +56,9 @@ export function loadNafathConfig(env: Env): NafathConfig {
     service: env['NAFATH_SERVICE'] || 'Login',
     audience: env['NAFATH_AUDIENCE'] ?? '',
     serverIp: env['NAFATH_SERVER_IP'] ?? '',
-    callbackAllowedIps: (env['NAFATH_CALLBACK_ALLOWED_IPS'] ?? DEFAULT_ALLOWED_IPS)
+    callbackAllowedIps: (
+      env['NAFATH_CALLBACK_ALLOWED_IPS'] || DEFAULT_ALLOWED_IPS
+    )
       .split(',')
       .map((ip) => ip.trim())
       .filter(Boolean),
