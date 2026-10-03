@@ -4,13 +4,13 @@
 
 **Goal:** Let users log in with Nafath (national ID + approval in the Nafath app) as an alternative to phone OTP, with a one-time phone-OTP link for national IDs not yet tied to an account.
 
-**Architecture:** New `src/modules/nafath/` module. `NafathClient` talks to Elm, `NafathJwtVerifier` verifies Elm's RS256 callback JWTs against the cached JWKS, `NafathService` owns the request lifecycle stored in a new `nafath_requests` table, and two controllers expose `/auth/nafath/*` (app-facing) and `/integrations/nafath/callback` (Elm-facing). The module imports `AuthModule` to issue the normal Aqar JWT; `AuthModule` is not modified except for a one-line hardening in `JwtStrategy`.
+**Architecture:** New `src/modules/nafath/` module. `NafathClient` talks to Elm, `NafathJwtVerifier` verifies Elm's RS256 callback JWTs against the cached JWKS, `NafathService` owns the request lifecycle stored in a new `nafath_requests` table, and two controllers expose `/auth/nafath/*` (app-facing) and `/nafath/callback` (Elm-facing; path registered with Elm). The module imports `AuthModule` to issue the normal Aqar JWT; `AuthModule` is not modified except for a one-line hardening in `JwtStrategy`.
 
 **Tech Stack:** NestJS 11, TypeORM 0.3 (Postgres), `@nestjs/jwt` 11 (jsonwebtoken 9), Node 22 built-in `fetch` and `crypto`, Jest 29 + ts-jest, `@nestjs/throttler` 6, `@nestjs/schedule`.
 
 **Spec:** `docs/superpowers/specs/2026-10-03-nafath-login-design.md`
 
-**Delivery order:** Tasks 1–10 are the **MVP** (end-to-end login working against sandbox). Task 11 is the manual sandbox smoke test. Tasks 12–13 (rate limiting, cron cleanup) harden it afterwards.
+**Delivery order:** Tasks 1–10 are the **MVP** (end-to-end login working against Nafath production). Task 11 is the manual production smoke test. Tasks 12–13 (rate limiting, cron cleanup) harden it afterwards.
 
 ## Global Constraints
 
@@ -2316,7 +2316,7 @@ git commit -m "feat(nafath): link a Nafath-verified national ID to the OTP-authe
   - `POST /api/v1/auth/nafath/start` body `{ nationalId, lang? }`
   - `GET /api/v1/auth/nafath/status/:requestId`
   - `POST /api/v1/auth/nafath/link` (Bearer) body `{ linkToken }`
-  - `POST /api/v1/integrations/nafath/callback` (IP allow-listed) — returns 200
+  - `POST /api/v1/nafath/callback` (IP allow-listed) — returns 200
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2508,7 +2508,7 @@ import { NafathIpGuard } from './nafath-ip.guard';
 import { NafathService } from './nafath.service';
 
 @ApiExcludeController()
-@Controller('integrations/nafath')
+@Controller('nafath')
 export class NafathCallbackController {
   constructor(private readonly nafath: NafathService) {}
 
@@ -2594,7 +2594,7 @@ export class NafathModule {}
 ```dotenv
 TRUST_PROXY=
 NAFATH_ENABLED=false
-NAFATH_BASE_URL=https://rabet-nafath.api.elm.sa/nafath-sandbox
+NAFATH_BASE_URL=https://rabet-nafath.api.elm.sa
 NAFATH_APP_ID=
 NAFATH_APP_KEY=
 NAFATH_SERVICE=Login
@@ -2642,18 +2642,18 @@ git commit -m "feat(nafath): expose Nafath login endpoints and callback"
 
 ---
 
-### Task 11: Sandbox smoke test (manual, on the KSA server)
+### Task 11: Production smoke test (manual, on the KSA server)
 
 No code. Run from the deployed backend: the egress IP must be the one registered with Elm, and the callback URL must be reachable from Nafath.
 
-- [ ] **Step 1: Configure the sandbox environment**
+- [ ] **Step 1: Configure the environment**
 
-Set on the server: `NAFATH_ENABLED=true`, `NAFATH_BASE_URL=https://rabet-nafath.api.elm.sa/nafath-sandbox`, sandbox `NAFATH_APP_ID`/`NAFATH_APP_KEY`, `NAFATH_AUDIENCE=<SP name on Rabet>`, `NAFATH_SERVER_IP=<registered egress IP>`, `NAFATH_LINK_TOKEN_SECRET=<openssl rand -hex 32>`, `TRUST_PROXY=<hops to the app, e.g. 1>`. Restart.
+Set on the server (test `api.test.aqora.sa` / prod `api.aqora.sa`): `NAFATH_ENABLED=true`, `NAFATH_BASE_URL=https://rabet-nafath.api.elm.sa`, the Rabet `NAFATH_APP_ID`/`NAFATH_APP_KEY`, `NAFATH_AUDIENCE=<SP name on Rabet>`, `NAFATH_SERVER_IP=<registered egress IP>`, `NAFATH_LINK_TOKEN_SECRET=<openssl rand -hex 32>`, `TRUST_PROXY=<hops to the app, e.g. 1>`. Restart.
 
 - [ ] **Step 2: Happy path for a new national ID**
 
-1. `POST /api/v1/auth/nafath/start {"nationalId":"<Elm sandbox test ID>"}` → expect `requestId`, `random`, `expiresAt`. If 503: check logs for `http=403` (credentials/egress IP) or `http=0` (network).
-2. Approve in the sandbox Nafath app (or Elm's simulator if they confirm it).
+1. `POST /api/v1/auth/nafath/start {"nationalId":"<a consenting team member's national ID>"}` → expect `requestId`, `random`, `expiresAt`. If 503: check logs for `http=403` (credentials/egress IP) or `http=0` (network).
+2. Approve in that person's Nafath app (production pushes to real devices).
 3. Poll `GET /api/v1/auth/nafath/status/<requestId>` → expect `COMPLETED` + `linkRequired: true` + `linkToken`.
 4. `POST /auth/send-otp` + `POST /auth/verify-otp` for a test phone → bearer token.
 5. `POST /api/v1/auth/nafath/link {"linkToken":"..."}` with the bearer → expect `user` with `isVerified: true`.

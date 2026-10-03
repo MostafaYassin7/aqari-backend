@@ -31,7 +31,7 @@ Add **Nafath as a second login method next to phone OTP**. A user enters their n
 ## 2. Prerequisites (operational, not code)
 
 1. **Fixed outbound IP registered with Elm.** Integrators report Elm allow-lists the SP's egress IP; every instance must leave through it (e.g., NAT gateway). The same IP is sent as the "server IP" in `X-Forwarded-For`. *Open: confirm we have one and it is registered on Rabet.*
-2. **Callback URL registered with Elm:** `https://<api-domain>/api/v1/integrations/nafath/callback`.
+2. **Callback URL registered with Elm:** `https://api.test.aqora.sa/api/v1/nafath/callback` (test) and `https://api.aqora.sa/api/v1/nafath/callback` (production) — registered on Rabet.
 3. **Firewall / ingress** accepts inbound traffic from `195.170.180.7` and `195.170.180.6`; outbound to the same.
 4. **Separate APP-ID/APP-KEY per environment** (sandbox, staging, production). A mismatched pair fails with a 403 indistinguishable from bad credentials.
 5. **SP name registered on Rabet** — the JWT `aud` claim must equal it.
@@ -57,7 +57,7 @@ src/modules/nafath/
 ├── nafath.module.ts
 ├── nafath.config.ts                 # typed env loader + validation
 ├── nafath-auth.controller.ts        # /auth/nafath/start | status/:requestId | link
-├── nafath-callback.controller.ts    # /integrations/nafath/callback
+├── nafath-callback.controller.ts    # /nafath/callback (path registered with Elm)
 ├── nafath.service.ts                # orchestration: start, status, callback, link
 ├── nafath.client.ts                 # HTTP calls to Elm (request, status, jwk)
 ├── nafath-jwt.verifier.ts           # JWK cache + RS256 verification
@@ -148,7 +148,7 @@ The `requestId` is an unguessable UUID known only to the initiating client.
      - User exists but inactive → 403.
      - No user → respond `{ status: 'COMPLETED', linkRequired: true, linkToken }`.
 
-### 6.3 Callback — `POST /api/v1/integrations/nafath/callback` (public + `NafathIpGuard`)
+### 6.3 Callback — `POST /api/v1/nafath/callback` (public + `NafathIpGuard`)
 
 1. `NafathIpGuard`: `req.ip` must be in `NAFATH_CALLBACK_ALLOWED_IPS` → else 403.
 2. Body is received as a plain object (`@Body() body: Record<string, unknown>`) and validated inside the controller with `plainToInstance(NafathCallbackDto, body)` + `validate(dto, { whitelist: true, forbidNonWhitelisted: false })`. Reason: the global `ValidationPipe` uses `forbidNonWhitelisted: true` and runs *before* any route-level pipe, so a DTO-typed body would reject every callback the moment Nafath adds a field. The global pipe skips non-class metatypes, so a plain-object param passes through untouched. Missing `token`/`transId`/`requestId` → 400.
@@ -227,7 +227,7 @@ Thrown as `new XxxException({ message: '<human text>', error: '<CODE>' })`; the 
 
 | Var | Example / default | Notes |
 |---|---|---|
-| `NAFATH_BASE_URL` | `https://rabet-nafath.api.elm.sa/nafath-sandbox` | Per environment. |
+| `NAFATH_BASE_URL` | `https://rabet-nafath.api.elm.sa` | Production (chosen for MVP). Sandbox would be `…/nafath-sandbox`. |
 | `NAFATH_APP_ID` | — | Required. |
 | `NAFATH_APP_KEY` | — | Required. Never logged. |
 | `NAFATH_SERVICE` | `Login` | |
