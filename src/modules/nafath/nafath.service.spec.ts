@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await */
-import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  GoneException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { NafathConfig } from './nafath.config';
 import { NafathApiError } from './nafath.errors';
 import { NafathService } from './nafath.service';
@@ -191,5 +197,192 @@ describe('NafathService.start', () => {
       service.start(NATIONAL_ID, undefined, '5.5.5.5'),
     ).rejects.toThrow(ServiceUnavailableException);
     expect(requestsRepo.findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('NafathService.getStatus', () => {
+  const linkedUser = {
+    id: 'user-1',
+    phone: '+966500000001',
+    role: 'USER',
+    isActive: true,
+  };
+
+  it('404s for an unknown request', async () => {
+    const { service, requestsRepo } = makeService();
+    requestsRepo.findOne.mockResolvedValue(null);
+    await expect(service.getStatus('missing')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('returns WAITING without polling during the first 10 seconds', async () => {
+    const { service, requestsRepo, client } = makeService();
+    const row = makeRow();
+    requestsRepo.findOne.mockResolvedValue(row);
+
+    await expect(service.getStatus(row.id)).resolves.toEqual({
+      status: 'WAITING',
+      expiresAt: row.expiresAt,
+    });
+    expect(client.getStatus).not.toHaveBeenCalled();
+  });
+
+  it('expires a WAITING row past expiry + grace', async () => {
+    const { service, requestsRepo, client } = makeService();
+    const row = makeRow({
+      expiresAt: new Date(Date.now() - 21_000),
+      createdAt: new Date(Date.now() - 81_000),
+    });
+    requestsRepo.findOne.mockResolvedValue(row);
+
+    await expect(service.getStatus(row.id)).resolves.toEqual({
+      status: 'EXPIRED',
+    });
+    expect(requestsRepo.update).toHaveBeenCalledWith(
+      { id: row.id, status: NafathRequestStatus.WAITING },
+      expect.objectContaining({ status: NafathRequestStatus.EXPIRED }),
+    );
+    expect(client.getStatus).not.toHaveBeenCalled();
+  });
+
+  it('polls Nafath after 10 s and logs a linked user in on COMPLETED', async () => {
+    const { service, requestsRepo, usersRepo, client, auth } = makeService();
+    const row = makeRow({ createdAt: new Date(Date.now() - 15_000) });
+    requestsRepo.findOne.mockResolvedValueOnce(row).mockResolvedValueOnce({
+      ...row,
+      status: NafathRequestStatus.COMPLETED,
+      statusSource: 'poll',
+    });
+    client.getStatus.mockResolvedValue('COMPLETED');
+    usersRepo.findOne.mockResolvedValue(linkedUser);
+
+    const result = await service.getStatus(row.id);
+
+    expect(client.getStatus).toHaveBeenCalledWith({
+      nationalId: NATIONAL_ID,
+      transId: 't-1',
+      random: '80',
+      clientIp: '5.5.5.5',
+    });
+    expect(requestsRepo.update).toHaveBeenCalledWith(row.id, {
+      lastPolledAt: expect.any(Date),
+    });
+    expect(requestsRepo.update).toHaveBeenCalledWith(
+      { id: row.id, status: NafathRequestStatus.WAITING },
+      expect.objectContaining({
+        status: NafathRequestStatus.COMPLETED,
+        statusSource: 'poll',
+      }),
+    );
+    expect(usersRepo.findOne).toHaveBeenCalledWith({
+      where: { nationalId: NATIONAL_ID },
+    });
+    expect(usersRepo.update).toHaveBeenCalledWith('user-1', {
+      nafathVerifiedAt: expect.any(Date),
+    });
+    expect(auth.generateToken).toHaveBeenCalledWith(linkedUser);
+    expect(result).toEqual({
+      status: 'COMPLETED',
+      token: 'aqar-jwt',
+      isNewUser: false,
+      user: linkedUser,
+    });
+  });
+
+  it('does not poll again within 5 s of the last poll', async () => {
+    const { service, requestsRepo, client } = makeService();
+    requestsRepo.findOne.mockResolvedValue(
+      makeRow({
+        createdAt: new Date(Date.now() - 15_000),
+        lastPolledAt: new Date(Date.now() - 2_000),
+      }),
+    );
+
+    await expect(service.getStatus('id')).resolves.toMatchObject({
+      status: 'WAITING',
+    });
+    expect(client.getStatus).not.toHaveBeenCalled();
+  });
+
+  it('treats upstream 400-034-051 as EXPIRED', async () => {
+    const { service, requestsRepo, client } = makeService();
+    const row = makeRow({ createdAt: new Date(Date.now() - 15_000) });
+    requestsRepo.findOne
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ ...row, status: NafathRequestStatus.EXPIRED });
+    client.getStatus.mockRejectedValue(
+      new NafathApiError(400, '400-034-051', 1, 'expired'),
+    );
+
+    await expect(service.getStatus(row.id)).resolves.toEqual({
+      status: 'EXPIRED',
+    });
+  });
+
+  it('keeps WAITING when polling fails for other reasons', async () => {
+    const { service, requestsRepo, client } = makeService();
+    requestsRepo.findOne.mockResolvedValue(
+      makeRow({ createdAt: new Date(Date.now() - 15_000) }),
+    );
+    client.getStatus.mockRejectedValue(
+      new NafathApiError(0, null, null, 'timeout'),
+    );
+
+    await expect(service.getStatus('id')).resolves.toMatchObject({
+      status: 'WAITING',
+    });
+  });
+
+  it('returns a link token when no user has this national ID', async () => {
+    const { service, requestsRepo, usersRepo, linkTokens } = makeService();
+    const row = makeRow({ status: NafathRequestStatus.COMPLETED });
+    requestsRepo.findOne.mockResolvedValue(row);
+    usersRepo.findOne.mockResolvedValue(null);
+
+    await expect(service.getStatus(row.id)).resolves.toEqual({
+      status: 'COMPLETED',
+      linkRequired: true,
+      linkToken: 'link-token',
+    });
+    expect(linkTokens.sign).toHaveBeenCalledWith(row.id);
+  });
+
+  it('redeems a COMPLETED result only once (concurrent polls)', async () => {
+    const { service, requestsRepo } = makeService();
+    requestsRepo.findOne.mockResolvedValue(
+      makeRow({ status: NafathRequestStatus.COMPLETED }),
+    );
+    requestsRepo.update.mockResolvedValue({ affected: 0 });
+
+    await expect(service.getStatus('id')).rejects.toThrow(GoneException);
+  });
+
+  it('refuses inactive accounts', async () => {
+    const { service, requestsRepo, usersRepo, auth } = makeService();
+    requestsRepo.findOne.mockResolvedValue(
+      makeRow({ status: NafathRequestStatus.COMPLETED }),
+    );
+    usersRepo.findOne.mockResolvedValue({ ...linkedUser, isActive: false });
+
+    await expect(service.getStatus('id')).rejects.toThrow(ForbiddenException);
+    expect(auth.generateToken).not.toHaveBeenCalled();
+  });
+
+  it('passes REJECTED and FAILED through', async () => {
+    const { service, requestsRepo } = makeService();
+    requestsRepo.findOne.mockResolvedValueOnce(
+      makeRow({ status: NafathRequestStatus.REJECTED }),
+    );
+    await expect(service.getStatus('id')).resolves.toEqual({
+      status: 'REJECTED',
+    });
+
+    requestsRepo.findOne.mockResolvedValueOnce(
+      makeRow({ status: NafathRequestStatus.FAILED }),
+    );
+    await expect(service.getStatus('id')).resolves.toEqual({
+      status: 'FAILED',
+    });
   });
 });
