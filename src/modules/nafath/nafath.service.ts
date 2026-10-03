@@ -10,15 +10,17 @@ import {
   NafathRequestStatus,
   NafathStatusSource,
 } from './entities/nafath-request.entity';
+import { NafathCallbackDto } from './dto/nafath-callback.dto';
 import { NafathClient } from './nafath.client';
 import { NAFATH_CONFIG, NafathConfig } from './nafath.config';
 import {
   NAFATH_CODES,
   NafathApiError,
+  NafathTokenError,
   nafathError,
   toHttpError,
 } from './nafath.errors';
-import { NafathJwtVerifier } from './nafath-jwt.verifier';
+import { NafathJwtVerifier, NafathTokenPayload } from './nafath-jwt.verifier';
 import { NafathLinkTokenService } from './nafath-link-token.service';
 
 export type NafathStatusResponse =
@@ -140,6 +142,66 @@ export class NafathService {
         return this.redeem(row);
       default:
         return { status: row.status };
+    }
+  }
+
+  async handleCallback(body: NafathCallbackDto): Promise<void> {
+    this.assertEnabled();
+
+    let payload: NafathTokenPayload;
+    try {
+      payload = await this.verifier.verify(body.token);
+    } catch (err) {
+      if (err instanceof NafathTokenError) {
+        this.logger.warn(
+          `Nafath callback rejected transId=${body.transId}: ${err.message}`,
+        );
+        throw nafathError.invalidToken();
+      }
+      this.logUpstreamError('callback key fetch', body.requestId, err);
+      throw nafathError.unavailable();
+    }
+
+    if (payload.transId !== body.transId) {
+      this.logger.warn(
+        `Nafath callback transId mismatch requestId=${body.requestId}`,
+      );
+      throw nafathError.invalidToken();
+    }
+
+    const row = await this.requestsRepo.findOne({
+      where: { id: body.requestId },
+    });
+    if (!row) {
+      this.logger.warn(
+        `Nafath callback for unknown requestId=${body.requestId}`,
+      );
+      return;
+    }
+    if (row.transId !== body.transId) {
+      this.logger.warn(
+        `Nafath callback transId does not match requestId=${body.requestId}`,
+      );
+      throw nafathError.invalidToken();
+    }
+
+    const status = parseTerminalStatus(payload.status);
+    if (!status) {
+      this.logger.warn(
+        `Nafath callback with non-terminal status requestId=${body.requestId}`,
+      );
+      return;
+    }
+
+    const claims = status === NafathRequestStatus.COMPLETED ? payload : null;
+    const changed = await this.finish(row.id, status, 'callback', claims);
+
+    if (!changed && claims) {
+      // Polling (or an earlier callback) already set COMPLETED; keep the signed claims once.
+      await this.requestsRepo.update(
+        { id: row.id, status: NafathRequestStatus.COMPLETED, claims: IsNull() },
+        { claims } as QueryDeepPartialEntity<NafathRequest>,
+      );
     }
   }
 

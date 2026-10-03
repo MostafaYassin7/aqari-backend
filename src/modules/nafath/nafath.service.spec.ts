@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await */
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   GoneException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { IsNull } from 'typeorm';
 import { NafathConfig } from './nafath.config';
-import { NafathApiError } from './nafath.errors';
+import { NafathApiError, NafathTokenError } from './nafath.errors';
 import { NafathService } from './nafath.service';
 import {
   NafathRequest,
@@ -384,5 +386,140 @@ describe('NafathService.getStatus', () => {
     await expect(service.getStatus('id')).resolves.toEqual({
       status: 'FAILED',
     });
+  });
+});
+
+describe('NafathService.handleCallback', () => {
+  const body = {
+    token: 'jwt',
+    transId: 't-1',
+    requestId: '2b1f8c1e-7d1a-4c5e-9a39-0f1c2d3e4f50',
+  };
+  const completedPayload = {
+    aud: 'AQAR',
+    transId: 't-1',
+    status: 'COMPLETED',
+    nin: NATIONAL_ID,
+  };
+
+  it('rejects tokens that fail verification with 400', async () => {
+    const { service, verifier, requestsRepo } = makeService();
+    verifier.verify.mockRejectedValue(new NafathTokenError('bad signature'));
+
+    await expect(service.handleCallback(body)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(requestsRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 when the JWKS cannot be fetched (so Nafath can retry)', async () => {
+    const { service, verifier } = makeService();
+    verifier.verify.mockRejectedValue(
+      new NafathApiError(503, null, null, 'down'),
+    );
+
+    await expect(service.handleCallback(body)).rejects.toThrow(
+      ServiceUnavailableException,
+    );
+  });
+
+  it('rejects a JWT whose transId differs from the body', async () => {
+    const { service, verifier } = makeService();
+    verifier.verify.mockResolvedValue({
+      ...completedPayload,
+      transId: 'other',
+    });
+
+    await expect(service.handleCallback(body)).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('acknowledges unknown requestIds without updating anything', async () => {
+    const { service, verifier, requestsRepo } = makeService();
+    verifier.verify.mockResolvedValue(completedPayload);
+    requestsRepo.findOne.mockResolvedValue(null);
+
+    await expect(service.handleCallback(body)).resolves.toBeUndefined();
+    expect(requestsRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a callback whose transId does not match our row', async () => {
+    const { service, verifier, requestsRepo } = makeService();
+    verifier.verify.mockResolvedValue(completedPayload);
+    requestsRepo.findOne.mockResolvedValue(makeRow({ transId: 'different' }));
+
+    await expect(service.handleCallback(body)).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('records COMPLETED with claims, taking status from the JWT', async () => {
+    const { service, verifier, requestsRepo } = makeService();
+    verifier.verify.mockResolvedValue(completedPayload);
+    requestsRepo.findOne.mockResolvedValue(makeRow());
+
+    await service.handleCallback(body);
+
+    expect(requestsRepo.update).toHaveBeenCalledWith(
+      { id: body.requestId, status: NafathRequestStatus.WAITING },
+      {
+        status: NafathRequestStatus.COMPLETED,
+        statusSource: 'callback',
+        completedAt: expect.any(Date),
+        claims: completedPayload,
+      },
+    );
+  });
+
+  it('back-fills claims when polling already marked the row COMPLETED', async () => {
+    const { service, verifier, requestsRepo } = makeService();
+    verifier.verify.mockResolvedValue(completedPayload);
+    requestsRepo.findOne.mockResolvedValue(
+      makeRow({ status: NafathRequestStatus.COMPLETED, statusSource: 'poll' }),
+    );
+    requestsRepo.update
+      .mockResolvedValueOnce({ affected: 0 })
+      .mockResolvedValueOnce({ affected: 1 });
+
+    await expect(service.handleCallback(body)).resolves.toBeUndefined();
+    expect(requestsRepo.update).toHaveBeenLastCalledWith(
+      {
+        id: body.requestId,
+        status: NafathRequestStatus.COMPLETED,
+        claims: IsNull(),
+      },
+      { claims: completedPayload },
+    );
+  });
+
+  it('records REJECTED without claims', async () => {
+    const { service, verifier, requestsRepo } = makeService();
+    verifier.verify.mockResolvedValue({
+      ...completedPayload,
+      status: 'REJECTED',
+    });
+    requestsRepo.findOne.mockResolvedValue(makeRow());
+
+    await service.handleCallback(body);
+    expect(requestsRepo.update).toHaveBeenCalledWith(
+      { id: body.requestId, status: NafathRequestStatus.WAITING },
+      expect.objectContaining({
+        status: NafathRequestStatus.REJECTED,
+        claims: null,
+      }),
+    );
+  });
+
+  it('ignores a non-terminal status in the JWT', async () => {
+    const { service, verifier, requestsRepo } = makeService();
+    verifier.verify.mockResolvedValue({
+      ...completedPayload,
+      status: 'WAITING',
+    });
+    requestsRepo.findOne.mockResolvedValue(makeRow());
+
+    await expect(service.handleCallback(body)).resolves.toBeUndefined();
+    expect(requestsRepo.update).not.toHaveBeenCalled();
   });
 });
