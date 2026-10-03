@@ -4,11 +4,12 @@ import {
   ConflictException,
   ForbiddenException,
   GoneException,
+  HttpException,
   NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { IsNull } from 'typeorm';
+import { IsNull, MoreThan } from 'typeorm';
 import { NafathConfig } from './nafath.config';
 import { NafathApiError, NafathTokenError } from './nafath.errors';
 import { NafathService } from './nafath.service';
@@ -201,6 +202,27 @@ describe('NafathService.start', () => {
       service.start(NATIONAL_ID, undefined, '5.5.5.5'),
     ).rejects.toThrow(ServiceUnavailableException);
     expect(requestsRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  describe('rate limit', () => {
+    it('rejects the 6th request for one national ID within 10 minutes', async () => {
+      const { service, requestsRepo, client } = makeService();
+      requestsRepo.findOne.mockResolvedValue(null);
+      requestsRepo.count.mockResolvedValue(5);
+
+      const err = await service
+        .start(NATIONAL_ID, undefined, '5.5.5.5')
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(HttpException);
+      expect((err as HttpException).getStatus()).toBe(429);
+      expect(requestsRepo.count).toHaveBeenCalledWith({
+        where: {
+          nationalId: NATIONAL_ID,
+          createdAt: MoreThan(expect.any(Date)),
+        },
+      });
+      expect(client.createRequest).not.toHaveBeenCalled();
+    });
   });
 });
 

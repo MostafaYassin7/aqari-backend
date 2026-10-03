@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, IsNull, MoreThan, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
@@ -41,6 +41,8 @@ export type NafathStatusResponse =
 
 const POLL_AFTER_MS = 10_000;
 const POLL_EVERY_MS = 5_000;
+const PER_ID_WINDOW_MS = 10 * 60 * 1000;
+const PER_ID_MAX_REQUESTS = 5;
 
 export function parseTerminalStatus(
   value: unknown,
@@ -92,6 +94,14 @@ export class NafathService {
       order: { createdAt: 'DESC' },
     });
     if (open && Date.now() < this.staleAt(open)) throw nafathError.pending();
+
+    const recent = await this.requestsRepo.count({
+      where: {
+        nationalId,
+        createdAt: MoreThan(new Date(Date.now() - PER_ID_WINDOW_MS)),
+      },
+    });
+    if (recent >= PER_ID_MAX_REQUESTS) throw nafathError.rateLimited();
 
     const row = this.requestsRepo.create({
       id: randomUUID(),
