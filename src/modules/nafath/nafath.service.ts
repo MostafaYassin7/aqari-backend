@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, IsNull, Not, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
@@ -55,6 +55,12 @@ export function parseTerminalStatus(
     default:
       return null;
   }
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    (err as { driverError?: { code?: string } })?.driverError?.code === '23505'
+  );
 }
 
 @Injectable()
@@ -203,6 +209,58 @@ export class NafathService {
         { claims } as QueryDeepPartialEntity<NafathRequest>,
       );
     }
+  }
+
+  async link(
+    userId: string,
+    linkToken: string,
+  ): Promise<{ user: Partial<User> }> {
+    this.assertEnabled();
+    const requestId = this.linkTokens.verify(linkToken);
+
+    return this.dataSource.transaction(async (manager) => {
+      const requests = manager.getRepository(NafathRequest);
+      const users = manager.getRepository(User);
+
+      const row = await requests.findOne({
+        where: { id: requestId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !row ||
+        row.status !== NafathRequestStatus.COMPLETED ||
+        !row.consumedAt ||
+        row.linkedUserId
+      ) {
+        throw nafathError.linkInvalid();
+      }
+
+      const owner = await users.findOne({
+        where: { nationalId: row.nationalId },
+      });
+      if (owner && owner.id !== userId) throw nafathError.idLinkedToOther();
+      if (!owner) {
+        const hasOtherId = await users.exists({
+          where: { id: userId, nationalId: Not(IsNull()) },
+        });
+        if (hasOtherId) throw nafathError.accountHasOtherId();
+      }
+
+      try {
+        await users.update(userId, {
+          nationalId: row.nationalId,
+          nafathVerifiedAt: new Date(),
+          isVerified: true,
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) throw nafathError.idLinkedToOther();
+        throw err;
+      }
+      await requests.update(row.id, { linkedUserId: userId });
+
+      const user = await users.findOneOrFail({ where: { id: userId } });
+      return { user: this.auth.sanitize(user) };
+    });
   }
 
   private assertEnabled(): void {

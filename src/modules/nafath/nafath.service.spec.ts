@@ -6,6 +6,7 @@ import {
   GoneException,
   NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { IsNull } from 'typeorm';
 import { NafathConfig } from './nafath.config';
@@ -15,6 +16,7 @@ import {
   NafathRequest,
   NafathRequestStatus,
 } from './entities/nafath-request.entity';
+import { User } from '../users/entities/user.entity';
 
 const NATIONAL_ID = '1000000001';
 
@@ -521,5 +523,149 @@ describe('NafathService.handleCallback', () => {
 
     await expect(service.handleCallback(body)).resolves.toBeUndefined();
     expect(requestsRepo.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('NafathService.link', () => {
+  function setup() {
+    const ctx = makeService();
+    const txRequests = {
+      findOne: jest.fn(),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const txUsers = {
+      findOne: jest.fn(),
+      exists: jest.fn().mockResolvedValue(false),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      findOneOrFail: jest
+        .fn()
+        .mockResolvedValue({ id: 'user-1', isVerified: true }),
+    };
+    ctx.dataSource.transaction.mockImplementation(
+      async (cb: (m: unknown) => unknown) =>
+        cb({
+          getRepository: (entity: unknown) =>
+            entity === User ? txUsers : txRequests,
+        }),
+    );
+    ctx.linkTokens.verify.mockReturnValue('req-1');
+    return { ...ctx, txRequests, txUsers };
+  }
+
+  const completedRow = () =>
+    makeRow({
+      id: 'req-1',
+      status: NafathRequestStatus.COMPLETED,
+      consumedAt: new Date(),
+    });
+
+  it('links the national ID to the current user', async () => {
+    const { service, txRequests, txUsers } = setup();
+    txRequests.findOne.mockResolvedValue(completedRow());
+    txUsers.findOne.mockResolvedValue(null);
+
+    await expect(service.link('user-1', 'link-token')).resolves.toEqual({
+      user: { id: 'user-1', isVerified: true },
+    });
+    expect(txRequests.findOne).toHaveBeenCalledWith({
+      where: { id: 'req-1' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    expect(txUsers.update).toHaveBeenCalledWith('user-1', {
+      nationalId: NATIONAL_ID,
+      nafathVerifiedAt: expect.any(Date),
+      isVerified: true,
+    });
+    expect(txRequests.update).toHaveBeenCalledWith('req-1', {
+      linkedUserId: 'user-1',
+    });
+  });
+
+  it('propagates an invalid link token as 401', async () => {
+    const { service, linkTokens, dataSource } = setup();
+    linkTokens.verify.mockImplementation(() => {
+      throw new UnauthorizedException();
+    });
+
+    await expect(service.link('user-1', 'bad')).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing', null],
+    [
+      'not completed',
+      makeRow({ id: 'req-1', status: NafathRequestStatus.WAITING }),
+    ],
+    [
+      'not redeemed',
+      makeRow({
+        id: 'req-1',
+        status: NafathRequestStatus.COMPLETED,
+        consumedAt: null,
+      }),
+    ],
+    [
+      'already linked',
+      makeRow({
+        id: 'req-1',
+        status: NafathRequestStatus.COMPLETED,
+        consumedAt: new Date(),
+        linkedUserId: 'u-9',
+      }),
+    ],
+  ])('rejects a request that is %s', async (_label, row) => {
+    const { service, txRequests, txUsers } = setup();
+    txRequests.findOne.mockResolvedValue(row);
+
+    await expect(service.link('user-1', 'link-token')).rejects.toMatchObject({
+      response: { error: 'NAFATH_LINK_INVALID' },
+    });
+    expect(txUsers.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects when another account owns the national ID', async () => {
+    const { service, txRequests, txUsers } = setup();
+    txRequests.findOne.mockResolvedValue(completedRow());
+    txUsers.findOne.mockResolvedValue({ id: 'someone-else' });
+
+    await expect(service.link('user-1', 'link-token')).rejects.toMatchObject({
+      response: { error: 'NAFATH_ID_LINKED_TO_OTHER_ACCOUNT' },
+    });
+  });
+
+  it('rejects when the current account already has a different national ID', async () => {
+    const { service, txRequests, txUsers } = setup();
+    txRequests.findOne.mockResolvedValue(completedRow());
+    txUsers.findOne.mockResolvedValue(null);
+    txUsers.exists.mockResolvedValue(true);
+
+    await expect(service.link('user-1', 'link-token')).rejects.toMatchObject({
+      response: { error: 'NAFATH_ACCOUNT_HAS_OTHER_ID' },
+    });
+  });
+
+  it('is idempotent when the current user already owns this national ID', async () => {
+    const { service, txRequests, txUsers } = setup();
+    txRequests.findOne.mockResolvedValue(completedRow());
+    txUsers.findOne.mockResolvedValue({ id: 'user-1' });
+
+    await expect(service.link('user-1', 'link-token')).resolves.toBeDefined();
+    expect(txUsers.exists).not.toHaveBeenCalled();
+  });
+
+  it('maps a unique-constraint race to NAFATH_ID_LINKED_TO_OTHER_ACCOUNT', async () => {
+    const { service, txRequests, txUsers } = setup();
+    txRequests.findOne.mockResolvedValue(completedRow());
+    txUsers.findOne.mockResolvedValue(null);
+    txUsers.update.mockRejectedValue(
+      Object.assign(new Error('duplicate'), { driverError: { code: '23505' } }),
+    );
+
+    await expect(service.link('user-1', 'link-token')).rejects.toMatchObject({
+      response: { error: 'NAFATH_ID_LINKED_TO_OTHER_ACCOUNT' },
+    });
   });
 });
