@@ -30,6 +30,13 @@ export class User extends BaseEntity {
   @Column({ type: 'boolean', default: false })
   isVerified!: boolean;
 
+  /** National ID / Iqama linked via Nafath. Never selected by default. */
+  @Column({ type: 'varchar', length: 10, unique: true, nullable: true, select: false })
+  nationalId!: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  nafathVerifiedAt!: Date | null;
+
   @Column({ type: 'boolean', default: true })
   isActive!: boolean;
 
