@@ -1,9 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await */
 import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { NafathConfig } from './nafath.config';
 import { NafathApiError } from './nafath.errors';
 import { NafathService } from './nafath.service';
-import { NafathRequest, NafathRequestStatus } from './entities/nafath-request.entity';
+import {
+  NafathRequest,
+  NafathRequestStatus,
+} from './entities/nafath-request.entity';
 
 const NATIONAL_ID = '1000000001';
 
@@ -15,11 +18,17 @@ function makeService(overrides: Partial<NafathConfig> = {}) {
     update: jest.fn().mockResolvedValue({ affected: 1 }),
     count: jest.fn().mockResolvedValue(0),
   };
-  const usersRepo = { findOne: jest.fn(), update: jest.fn().mockResolvedValue({ affected: 1 }) };
+  const usersRepo = {
+    findOne: jest.fn(),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
+  };
   const dataSource = { transaction: jest.fn() };
   const client = { createRequest: jest.fn(), getStatus: jest.fn() };
   const verifier = { verify: jest.fn() };
-  const linkTokens = { sign: jest.fn().mockReturnValue('link-token'), verify: jest.fn() };
+  const linkTokens = {
+    sign: jest.fn().mockReturnValue('link-token'),
+    verify: jest.fn(),
+  };
   const auth = {
     generateToken: jest.fn().mockReturnValue('aqar-jwt'),
     sanitize: jest.fn((u: unknown) => u),
@@ -43,7 +52,16 @@ function makeService(overrides: Partial<NafathConfig> = {}) {
     auth as never,
     config,
   );
-  return { service, requestsRepo, usersRepo, dataSource, client, verifier, linkTokens, auth };
+  return {
+    service,
+    requestsRepo,
+    usersRepo,
+    dataSource,
+    client,
+    verifier,
+    linkTokens,
+    auth,
+  };
 }
 
 function makeRow(overrides: Partial<NafathRequest> = {}): NafathRequest {
@@ -93,8 +111,15 @@ describe('NafathService.start', () => {
       requestId: saved.id,
       clientIp: '5.5.5.5',
     });
-    expect(requestsRepo.update).toHaveBeenCalledWith(saved.id, { transId: 't-1', random: '80' });
-    expect(result).toEqual({ requestId: saved.id, random: '80', expiresAt: saved.expiresAt });
+    expect(requestsRepo.update).toHaveBeenCalledWith(saved.id, {
+      transId: 't-1',
+      random: '80',
+    });
+    expect(result).toEqual({
+      requestId: saved.id,
+      random: '80',
+      expiresAt: saved.expiresAt,
+    });
   });
 
   it('uses the configured locale when none is given', async () => {
@@ -103,32 +128,44 @@ describe('NafathService.start', () => {
     client.createRequest.mockResolvedValue({ transId: 't-1', random: '80' });
 
     await service.start(NATIONAL_ID, undefined, '5.5.5.5');
-    expect(client.createRequest).toHaveBeenCalledWith(expect.objectContaining({ locale: 'ar' }));
+    expect(client.createRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ locale: 'ar' }),
+    );
   });
 
   it('returns 409 without calling Nafath while a local request is still open', async () => {
     const { service, requestsRepo, client } = makeService();
     requestsRepo.findOne.mockResolvedValue(makeRow());
 
-    await expect(service.start(NATIONAL_ID, undefined, '5.5.5.5')).rejects.toThrow(ConflictException);
+    await expect(
+      service.start(NATIONAL_ID, undefined, '5.5.5.5'),
+    ).rejects.toThrow(ConflictException);
     expect(client.createRequest).not.toHaveBeenCalled();
     expect(requestsRepo.save).not.toHaveBeenCalled();
   });
 
   it('ignores a stale WAITING row past expiry + grace', async () => {
     const { service, requestsRepo, client } = makeService();
-    requestsRepo.findOne.mockResolvedValue(makeRow({ expiresAt: new Date(Date.now() - 21_000) }));
+    requestsRepo.findOne.mockResolvedValue(
+      makeRow({ expiresAt: new Date(Date.now() - 21_000) }),
+    );
     client.createRequest.mockResolvedValue({ transId: 't-2', random: '12' });
 
-    await expect(service.start(NATIONAL_ID, undefined, '5.5.5.5')).resolves.toMatchObject({ random: '12' });
+    await expect(
+      service.start(NATIONAL_ID, undefined, '5.5.5.5'),
+    ).resolves.toMatchObject({ random: '12' });
   });
 
   it('marks the row FAILED and maps upstream 400-034-050 to 409', async () => {
     const { service, requestsRepo, client } = makeService();
     requestsRepo.findOne.mockResolvedValue(null);
-    client.createRequest.mockRejectedValue(new NafathApiError(400, '400-034-050', 77, 'active'));
+    client.createRequest.mockRejectedValue(
+      new NafathApiError(400, '400-034-050', 77, 'active'),
+    );
 
-    await expect(service.start(NATIONAL_ID, undefined, '5.5.5.5')).rejects.toThrow(ConflictException);
+    await expect(
+      service.start(NATIONAL_ID, undefined, '5.5.5.5'),
+    ).rejects.toThrow(ConflictException);
     const saved = requestsRepo.save.mock.calls[0][0] as NafathRequest;
     expect(requestsRepo.update).toHaveBeenCalledWith(saved.id, {
       status: NafathRequestStatus.FAILED,
@@ -139,14 +176,20 @@ describe('NafathService.start', () => {
   it('maps outages to 503', async () => {
     const { service, requestsRepo, client } = makeService();
     requestsRepo.findOne.mockResolvedValue(null);
-    client.createRequest.mockRejectedValue(new NafathApiError(0, null, null, 'timeout'));
+    client.createRequest.mockRejectedValue(
+      new NafathApiError(0, null, null, 'timeout'),
+    );
 
-    await expect(service.start(NATIONAL_ID, undefined, '5.5.5.5')).rejects.toThrow(ServiceUnavailableException);
+    await expect(
+      service.start(NATIONAL_ID, undefined, '5.5.5.5'),
+    ).rejects.toThrow(ServiceUnavailableException);
   });
 
   it('refuses to run when Nafath is disabled', async () => {
     const { service, requestsRepo } = makeService({ enabled: false });
-    await expect(service.start(NATIONAL_ID, undefined, '5.5.5.5')).rejects.toThrow(ServiceUnavailableException);
+    await expect(
+      service.start(NATIONAL_ID, undefined, '5.5.5.5'),
+    ).rejects.toThrow(ServiceUnavailableException);
     expect(requestsRepo.findOne).not.toHaveBeenCalled();
   });
 });

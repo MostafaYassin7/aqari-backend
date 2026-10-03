@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { DataSource, Repository } from 'typeorm';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../users/entities/user.entity';
 import {
@@ -91,22 +92,31 @@ export class NafathService {
     source: NafathStatusSource | null,
     claims: Record<string, unknown> | null,
   ): Promise<boolean> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await this.requestsRepo.update(
       { id, status: NafathRequestStatus.WAITING },
-      { status, statusSource: source, completedAt: new Date(), claims } as any,
+      {
+        status,
+        statusSource: source,
+        completedAt: new Date(),
+        claims,
+      } as QueryDeepPartialEntity<NafathRequest>,
     );
     return (res.affected ?? 0) > 0;
   }
 
   private logUpstreamError(op: string, requestId: string, err: unknown): void {
     if (err instanceof NafathApiError) {
-      const hint = err.httpStatus === 403 ? ' (check APP-ID/APP-KEY for this environment)' : '';
+      const hint =
+        err.httpStatus === 403
+          ? ' (check APP-ID/APP-KEY for this environment)'
+          : '';
       this.logger.error(
         `Nafath ${op} failed requestId=${requestId} http=${err.httpStatus} code=${err.code} ref=${err.reference}${hint}`,
       );
     } else {
-      this.logger.error(`Nafath ${op} failed requestId=${requestId}: ${(err as Error).message}`);
+      this.logger.error(
+        `Nafath ${op} failed requestId=${requestId}: ${(err as Error).message}`,
+      );
     }
   }
 }
