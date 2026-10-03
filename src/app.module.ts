@@ -6,6 +6,7 @@ import { databaseConfig } from './config/database.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { NafathModule } from './modules/nafath/nafath.module';
 import { MediaModule } from './modules/media/media.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
 import { ListingsModule } from './modules/listings/listings.module';
@@ -29,6 +30,7 @@ import { ComplaintsModule } from './modules/complaints/complaints.module';
     TypeOrmModule.forRootAsync(databaseConfig),
     UsersModule,
     AuthModule,
+    NafathModule,
     ListingsModule,
     BookingsModule,
     SearchModule,
