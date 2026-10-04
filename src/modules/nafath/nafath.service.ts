@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { DataSource, IsNull, MoreThan, Repository } from 'typeorm';
@@ -59,6 +59,22 @@ export function parseTerminalStatus(
     default:
       return null;
   }
+}
+
+/** Nafath Web tokens carry `nationalId`; app-push tokens use `nin` / `iqamaNumber`. */
+export function extractNationalId(payload: NafathTokenPayload): string | null {
+  for (const key of [
+    'nationalId',
+    'nin',
+    'iqamaNumber',
+    'visaNumber',
+    'borderNumber',
+  ]) {
+    const value = payload[key];
+    const text = typeof value === 'number' ? String(value) : value;
+    if (typeof text === 'string' && /^\d{10}$/.test(text)) return text;
+  }
+  return null;
 }
 
 function isUniqueViolation(err: unknown): boolean {
@@ -242,6 +258,85 @@ export class NafathService {
     }
   }
 
+  /** Nafath Web: returns the signed Nafath login page URL for the browser. */
+  async startWebSession(
+    lang: 'ar' | 'en' | undefined,
+    clientIp: string,
+  ): Promise<{ url: string }> {
+    this.assertEnabled();
+    if (!this.config.webRedirectUrl) throw nafathError.disabled();
+    const requestId = randomUUID();
+    try {
+      return await this.client.createWebSession({
+        locale: lang ?? this.config.locale,
+        requestId,
+        clientIp,
+      });
+    } catch (err) {
+      this.logUpstreamError('web session', requestId, err);
+      throw toHttpError(err);
+    }
+  }
+
+  /**
+   * Nafath Web: the browser came back from Nafath with a single-use `state`.
+   * Exchanges it for the signed JWT, then logs the user in or asks for a link.
+   * Returns the frontend URL to redirect the browser to; the outcome travels in
+   * the URL fragment (`#token=` | `#linkToken=` | `#error=`), which browsers
+   * never send to any server.
+   */
+  async completeWebLogin(state: string, clientIp: string): Promise<string> {
+    const target = this.config.webRedirectUrl;
+    if (!this.config.enabled || !target) throw nafathError.disabled();
+
+    try {
+      const token = await this.client.retrieveWebToken(state, clientIp);
+      const payload = await this.verifier.verify(token);
+      // Claim names only (no values) — to learn the real token layout.
+      this.logger.log(
+        `Nafath web token claims: ${Object.keys(payload).join(',')}`,
+      );
+
+      const nationalId = extractNationalId(payload);
+      if (!nationalId) throw new NafathTokenError('no national ID claim');
+
+      const now = new Date();
+      const row = this.requestsRepo.create({
+        id: randomUUID(),
+        nationalId,
+        service: 'WEB',
+        status: NafathRequestStatus.COMPLETED,
+        statusSource: 'callback',
+        claims: payload,
+        clientIp,
+        expiresAt: now,
+        completedAt: now,
+        consumedAt: now,
+      });
+      await this.requestsRepo.save(row);
+
+      const result = await this.loginOrLink(row);
+      return 'token' in result
+        ? `${target}#token=${encodeURIComponent(result.token)}`
+        : `${target}#linkToken=${encodeURIComponent(result.linkToken)}`;
+    } catch (err) {
+      let code = 'NAFATH_UNAVAILABLE';
+      if (err instanceof NafathTokenError) {
+        code = 'NAFATH_INVALID_CALLBACK';
+        this.logger.warn(`Nafath web login rejected: ${err.message}`);
+      } else if (err instanceof NafathApiError) {
+        this.logUpstreamError('web login', '-', err);
+      } else if (err instanceof HttpException) {
+        const body = err.getResponse() as { error?: unknown };
+        if (typeof body?.error === 'string') code = body.error;
+        this.logger.warn(`Nafath web login failed: ${code}`);
+      } else {
+        this.logger.error(`Nafath web login failed: ${(err as Error).message}`);
+      }
+      return `${target}#error=${code}`;
+    }
+  }
+
   async link(
     userId: string,
     linkToken: string,
@@ -397,7 +492,13 @@ export class NafathService {
       { consumedAt: new Date() },
     );
     if (!claimed.affected) throw nafathError.alreadyUsed();
+    return this.loginOrLink(row);
+  }
 
+  /** Completed + consumed request → Aqar session for the linked user, or a link token. */
+  private async loginOrLink(
+    row: NafathRequest,
+  ): Promise<Extract<NafathStatusResponse, { status: 'COMPLETED' }>> {
     const user = await this.usersRepo.findOne({
       where: { nationalId: row.nationalId },
     });

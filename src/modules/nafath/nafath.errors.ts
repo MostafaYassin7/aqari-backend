@@ -39,30 +39,64 @@ export class NafathTokenError extends Error {
 
 export const nafathError = {
   disabled: () =>
-    new ServiceUnavailableException({ message: 'Nafath login is not enabled', error: 'NAFATH_DISABLED' }),
+    new ServiceUnavailableException({
+      message: 'Nafath login is not enabled',
+      error: 'NAFATH_DISABLED',
+    }),
   unavailable: () =>
-    new ServiceUnavailableException({ message: 'Nafath is unavailable, try again later', error: 'NAFATH_UNAVAILABLE' }),
+    new ServiceUnavailableException({
+      message: 'Nafath is unavailable, try again later',
+      error: 'NAFATH_UNAVAILABLE',
+    }),
   pending: () =>
     new ConflictException({
-      message: 'A Nafath request is already open for this ID — approve it or try again in about a minute',
+      message:
+        'A Nafath request is already open for this ID — approve it or try again in about a minute',
       error: 'NAFATH_REQUEST_PENDING',
     }),
   invalidRequest: () =>
-    new BadRequestException({ message: 'Nafath rejected the request data', error: 'NAFATH_INVALID_REQUEST' }),
+    new BadRequestException({
+      message: 'Nafath rejected the request data',
+      error: 'NAFATH_INVALID_REQUEST',
+    }),
   rateLimited: () =>
-    new HttpException({ message: 'Too many Nafath requests for this ID, try again later', error: 'NAFATH_RATE_LIMITED' }, 429),
+    new HttpException(
+      {
+        message: 'Too many Nafath requests for this ID, try again later',
+        error: 'NAFATH_RATE_LIMITED',
+      },
+      429,
+    ),
   notFound: () =>
-    new NotFoundException({ message: 'Nafath request not found', error: 'NAFATH_REQUEST_NOT_FOUND' }),
+    new NotFoundException({
+      message: 'Nafath request not found',
+      error: 'NAFATH_REQUEST_NOT_FOUND',
+    }),
   alreadyUsed: () =>
-    new GoneException({ message: 'This Nafath result was already used — start again', error: 'NAFATH_RESULT_ALREADY_USED' }),
+    new GoneException({
+      message: 'This Nafath result was already used — start again',
+      error: 'NAFATH_RESULT_ALREADY_USED',
+    }),
   accountInactive: () =>
-    new ForbiddenException({ message: 'This account is inactive', error: 'NAFATH_ACCOUNT_INACTIVE' }),
+    new ForbiddenException({
+      message: 'This account is inactive',
+      error: 'NAFATH_ACCOUNT_INACTIVE',
+    }),
   invalidToken: () =>
-    new BadRequestException({ message: 'Invalid Nafath callback', error: 'NAFATH_INVALID_CALLBACK' }),
+    new BadRequestException({
+      message: 'Invalid Nafath callback',
+      error: 'NAFATH_INVALID_CALLBACK',
+    }),
   linkTokenInvalid: () =>
-    new UnauthorizedException({ message: 'Nafath link token is invalid or expired', error: 'NAFATH_LINK_TOKEN_INVALID' }),
+    new UnauthorizedException({
+      message: 'Nafath link token is invalid or expired',
+      error: 'NAFATH_LINK_TOKEN_INVALID',
+    }),
   linkInvalid: () =>
-    new ConflictException({ message: 'This Nafath result cannot be linked', error: 'NAFATH_LINK_INVALID' }),
+    new ConflictException({
+      message: 'This Nafath result cannot be linked',
+      error: 'NAFATH_LINK_INVALID',
+    }),
   idLinkedToOther: () =>
     new ConflictException({
       message: 'This national ID is already linked to another account',

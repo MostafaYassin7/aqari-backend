@@ -15,6 +15,8 @@ export interface NafathConfig {
   graceSeconds: number;
   linkTokenSecret: string;
   retentionDays: number;
+  /** Frontend page the browser is sent to after a Nafath Web login (token/linkToken/error in the URL fragment). */
+  webRedirectUrl: string;
 }
 
 type Env = Record<string, string | undefined>;
@@ -67,5 +69,6 @@ export function loadNafathConfig(env: Env): NafathConfig {
     graceSeconds: positiveInt(env['NAFATH_GRACE_SECONDS'], 20),
     linkTokenSecret: env['NAFATH_LINK_TOKEN_SECRET'] ?? '',
     retentionDays: positiveInt(env['NAFATH_RETENTION_DAYS'], 30),
+    webRedirectUrl: env['NAFATH_WEB_REDIRECT_URL'] ?? '',
   };
 }

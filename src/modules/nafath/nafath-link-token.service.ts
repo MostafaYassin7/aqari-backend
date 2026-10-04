@@ -19,16 +19,23 @@ export class NafathLinkTokenService {
   sign(requestId: string): string {
     return this.jwt.sign(
       { purpose: PURPOSE, rid: requestId },
-      { secret: this.config.linkTokenSecret, algorithm: 'HS256', expiresIn: '10m' },
+      {
+        secret: this.config.linkTokenSecret,
+        algorithm: 'HS256',
+        expiresIn: '10m',
+      },
     );
   }
 
   verify(token: string): string {
     try {
-      const payload = this.jwt.verify<{ purpose?: unknown; rid?: unknown }>(token, {
-        secret: this.config.linkTokenSecret,
-        algorithms: ['HS256'],
-      });
+      const payload = this.jwt.verify<{ purpose?: unknown; rid?: unknown }>(
+        token,
+        {
+          secret: this.config.linkTokenSecret,
+          algorithms: ['HS256'],
+        },
+      );
       if (payload.purpose !== PURPOSE || typeof payload.rid !== 'string') {
         throw new Error('wrong purpose');
       }

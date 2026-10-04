@@ -34,7 +34,12 @@ function makeService(overrides: Partial<NafathConfig> = {}) {
     update: jest.fn().mockResolvedValue({ affected: 1 }),
   };
   const dataSource = { transaction: jest.fn() };
-  const client = { createRequest: jest.fn(), getStatus: jest.fn() };
+  const client = {
+    createRequest: jest.fn(),
+    getStatus: jest.fn(),
+    createWebSession: jest.fn(),
+    retrieveWebToken: jest.fn(),
+  };
   const verifier = { verify: jest.fn() };
   const linkTokens = {
     sign: jest.fn().mockReturnValue('link-token'),
@@ -761,5 +766,102 @@ describe('NafathService.link', () => {
       response: { error: 'NAFATH_ID_LINKED_TO_OTHER_ACCOUNT' },
     });
     expect(txRequests.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('NafathService web login', () => {
+  const REDIRECT = 'https://aqora.sa/ar/nafath/callback';
+  const webPayload = { aud: 'AQAR', nationalId: NATIONAL_ID, arabicName: 'x' };
+
+  it('returns the Nafath page URL for a new session', async () => {
+    const { service, client } = makeService({ webRedirectUrl: REDIRECT });
+    client.createWebSession.mockResolvedValue({ url: 'https://nafath/page' });
+
+    await expect(service.startWebSession('en', '5.5.5.5')).resolves.toEqual({
+      url: 'https://nafath/page',
+    });
+    expect(client.createWebSession).toHaveBeenCalledWith(
+      expect.objectContaining({ locale: 'en', clientIp: '5.5.5.5' }),
+    );
+  });
+
+  it('refuses to start without a configured redirect URL', async () => {
+    const { service } = makeService({ webRedirectUrl: '' });
+    await expect(service.startWebSession(undefined, '5.5.5.5')).rejects.toThrow(
+      ServiceUnavailableException,
+    );
+  });
+
+  it('logs a linked user in and puts the token in the URL fragment', async () => {
+    const { service, client, verifier, usersRepo, requestsRepo } = makeService({
+      webRedirectUrl: REDIRECT,
+    });
+    client.retrieveWebToken.mockResolvedValue('elm.jwt');
+    verifier.verify.mockResolvedValue(webPayload);
+    usersRepo.findOne.mockResolvedValue({ id: 'user-1', isActive: true });
+
+    await expect(service.completeWebLogin('state-1', '5.5.5.5')).resolves.toBe(
+      `${REDIRECT}#token=aqar-jwt`,
+    );
+    expect(client.retrieveWebToken).toHaveBeenCalledWith('state-1', '5.5.5.5');
+    const saved = requestsRepo.save.mock.calls[0][0] as NafathRequest;
+    expect(saved).toMatchObject({
+      nationalId: NATIONAL_ID,
+      service: 'WEB',
+      status: NafathRequestStatus.COMPLETED,
+      claims: webPayload,
+    });
+    expect(saved.consumedAt).toBeInstanceOf(Date);
+  });
+
+  it('returns a link token for an unlinked national ID', async () => {
+    const { service, client, verifier, usersRepo, linkTokens, requestsRepo } =
+      makeService({ webRedirectUrl: REDIRECT });
+    client.retrieveWebToken.mockResolvedValue('elm.jwt');
+    verifier.verify.mockResolvedValue(webPayload);
+    usersRepo.findOne.mockResolvedValue(null);
+
+    await expect(service.completeWebLogin('state-1', '5.5.5.5')).resolves.toBe(
+      `${REDIRECT}#linkToken=link-token`,
+    );
+    const saved = requestsRepo.save.mock.calls[0][0] as NafathRequest;
+    expect(linkTokens.sign).toHaveBeenCalledWith(saved.id);
+  });
+
+  it('redirects with an error code when Elm rejects the state', async () => {
+    const { service, client } = makeService({ webRedirectUrl: REDIRECT });
+    client.retrieveWebToken.mockRejectedValue(
+      new NafathApiError(401, '401-033-024', 1, 'bad state'),
+    );
+    await expect(service.completeWebLogin('bad', '5.5.5.5')).resolves.toBe(
+      `${REDIRECT}#error=NAFATH_UNAVAILABLE`,
+    );
+  });
+
+  it('redirects with NAFATH_INVALID_CALLBACK for a bad token or missing ID', async () => {
+    const { service, client, verifier } = makeService({
+      webRedirectUrl: REDIRECT,
+    });
+    client.retrieveWebToken.mockResolvedValue('elm.jwt');
+    verifier.verify.mockResolvedValueOnce({ aud: 'AQAR' });
+    await expect(service.completeWebLogin('s', '5.5.5.5')).resolves.toBe(
+      `${REDIRECT}#error=NAFATH_INVALID_CALLBACK`,
+    );
+    verifier.verify.mockRejectedValueOnce(new NafathTokenError('bad sig'));
+    await expect(service.completeWebLogin('s', '5.5.5.5')).resolves.toBe(
+      `${REDIRECT}#error=NAFATH_INVALID_CALLBACK`,
+    );
+  });
+
+  it('passes inactive-account errors through as their code', async () => {
+    const { service, client, verifier, usersRepo } = makeService({
+      webRedirectUrl: REDIRECT,
+    });
+    client.retrieveWebToken.mockResolvedValue('elm.jwt');
+    verifier.verify.mockResolvedValue(webPayload);
+    usersRepo.findOne.mockResolvedValue({ id: 'user-1', isActive: false });
+    await expect(service.completeWebLogin('s', '5.5.5.5')).resolves.toBe(
+      `${REDIRECT}#error=NAFATH_ACCOUNT_INACTIVE`,
+    );
   });
 });

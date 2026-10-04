@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -42,6 +44,23 @@ export class NafathAuthController {
   @ApiResponse({ status: 201, description: '{ requestId, random, expiresAt }' })
   start(@Body() dto: StartNafathDto, @Req() req: Request) {
     return this.nafath.start(dto.nationalId, dto.lang, normalizeIp(req.ip));
+  }
+
+  @Public()
+  @UseGuards(NafathThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Get('web/session')
+  @ApiOperation({
+    summary:
+      'Nafath Web login — returns the Nafath page URL to send the browser to',
+  })
+  @ApiQuery({ name: 'lang', required: false, enum: ['ar', 'en'] })
+  @ApiResponse({ status: 200, description: '{ url }' })
+  webSession(@Query('lang') lang: string | undefined, @Req() req: Request) {
+    return this.nafath.startWebSession(
+      lang === 'en' ? 'en' : lang === 'ar' ? 'ar' : undefined,
+      normalizeIp(req.ip),
+    );
   }
 
   @Public()

@@ -17,9 +17,18 @@ export class NafathIpGuard implements CanActivate {
   constructor(@Inject(NAFATH_CONFIG) private readonly config: NafathConfig) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const ip = normalizeIp(context.switchToHttp().getRequest<Request>().ip);
-    if (ip && this.config.callbackAllowedIps.includes(ip)) return true;
+    this.assertAllowed(context.switchToHttp().getRequest<Request>().ip);
+    return true;
+  }
+
+  /** Throws 403 unless the request comes from one of Nafath's source IPs. */
+  assertAllowed(rawIp: string | undefined): void {
+    const ip = normalizeIp(rawIp);
+    if (ip && this.config.callbackAllowedIps.includes(ip)) return;
     this.logger.warn(`Rejected Nafath callback from ${ip || 'unknown IP'}`);
-    throw new ForbiddenException();
+    throw new ForbiddenException({
+      message: 'Forbidden',
+      error: 'NAFATH_FORBIDDEN_SOURCE',
+    });
   }
 }

@@ -63,6 +63,37 @@ export class NafathClient {
     return res.status;
   }
 
+  /** Nafath Web (OIDC): signed URL of the Nafath login page for one session. */
+  async createWebSession(p: {
+    locale: 'ar' | 'en';
+    requestId: string;
+    clientIp: string;
+  }): Promise<{ url: string }> {
+    const query = new URLSearchParams({
+      locale: p.locale,
+      requestId: p.requestId,
+    });
+    const res = await this.call<{ url?: unknown } | null>(
+      'GET',
+      `/api/v2/oidc/session?${query.toString()}`,
+      p.clientIp,
+    );
+    if (typeof res?.url !== 'string') throw malformed();
+    return { url: res.url };
+  }
+
+  /** Nafath Web (OIDC): exchanges the single-use `state` for the signed user JWT. */
+  async retrieveWebToken(state: string, clientIp: string): Promise<string> {
+    const res = await this.call<{ token?: unknown } | null>(
+      'POST',
+      '/api/v2/oidc/jwt',
+      clientIp,
+      { state },
+    );
+    if (typeof res?.token !== 'string') throw malformed();
+    return res.token;
+  }
+
   async getJwks(): Promise<NafathJwk[]> {
     const res = await this.call<{ keys?: unknown } | null>(
       'GET',
