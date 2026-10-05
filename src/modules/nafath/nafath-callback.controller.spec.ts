@@ -91,6 +91,17 @@ describe('NafathCallbackController', () => {
       expect(service.handleCallback).not.toHaveBeenCalled();
     });
 
+    it('treats a form POST with state plus status/user data as web, even with a token field', async () => {
+      const { controller, service, res } = make();
+      await controller.callback(
+        { state: 's-3', status: 'COMPLETED', token: 'x', nationalId: '1' },
+        browserIp,
+        res as never,
+      );
+      expect(service.completeWebLogin).toHaveBeenCalledWith('s-3', '5.5.5.5');
+      expect(service.handleCallback).not.toHaveBeenCalled();
+    });
+
     it('finishes a state passed in the query string', async () => {
       const { controller, service, res } = make();
       await controller.webCallback('s-2', browserIp, res as never);

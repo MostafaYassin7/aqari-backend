@@ -68,7 +68,12 @@ export class NafathCallbackController {
     // Express 5 leaves req.body undefined for requests without a parsed body.
     const input = typeof body === 'object' && body !== null ? body : {};
 
-    if (typeof input.state === 'string' && input.state && !('token' in input)) {
+    // Web posts `state` (+ status / user data); app-push always carries `transId`.
+    if (
+      typeof input.state === 'string' &&
+      input.state &&
+      !('transId' in input)
+    ) {
       res.redirect(
         303,
         await this.nafath.completeWebLogin(input.state, normalizeIp(req.ip)),
